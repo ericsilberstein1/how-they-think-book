@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 13: Transformer block &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-12.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-14.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">13</p>
+      <hr class="chapter-rule">
+      <h1>Transformer block</h1>
+    </div>
+    <p>We’re ready to get back into the transformer. As a reminder of where we are and the big picture, our tokenizer (not shown in the diagram) converted text, say “The capital of France is,” to a sequence  of tokens: 449, 3422, 281, 4192, 309. The embedding module converted each of those into an embedding of 1280 numbers filled with meaning. We’re now going to feed this 5×1280 tensor into our first transformer block. We’ll then take the output, which will also be 5×1280, and feed it to the second block. We’ll repeat this over and over through a total of 20 blocks. We aim for that final output, once <em>projected</em> onto the vocabulary by the final linear layer, to be an appropriate prediction for the next token for each input token. After training, I sincerely hope that the top next token prediction after “is” will be “Paris!”</p>
+    <figure id="fig-13-1">
+      <input type="checkbox" id="lb-157" class="lightbox-toggle">
+      <label for="lb-157"><img src="images/RC129.png" alt="" loading="lazy"></label>
+      <label for="lb-157" class="lightbox-overlay"><img src="images/RC129.png" alt=""></label>
+      <figcaption>Figure 13.1. Model architecture. We’re about to dig into the transformer block.</figcaption>
+    </figure>
+    <p>Let’s look inside the transformer block.</p>
+    <figure id="fig-13-2">
+      <input type="checkbox" id="lb-158" class="lightbox-toggle">
+      <label for="lb-158"><img src="images/RC141.png" alt="" loading="lazy"></label>
+      <label for="lb-158" class="lightbox-overlay"><img src="images/RC141.png" alt=""></label>
+      <figcaption>Figure 13.2. Inside the transformer block.</figcaption>
+    </figure>
+    <p>Take a look at the diagram. Where do you think the learning is happening? The norm and adding operation are critical but contain no parameters of their own. Therefore all the parameters we need to learn must be somewhere in the causal self attention and/or MLP modules. Spoiler alert—they are in both. You will see.</p>
+    <p>To keep this concrete, here’s example output from the embed module that we can use as input to the first transformer block:</p>
+    <figure id="fig-13-3" style="max-width:70%">
+      <input type="checkbox" id="lb-159" class="lightbox-toggle">
+      <label for="lb-159"><img src="images/RC142.png" alt="" loading="lazy"></label>
+      <label for="lb-159" class="lightbox-overlay"><img src="images/RC142.png" alt=""></label>
+      <figcaption>Figure 13.3. Example input to our first transformer block.</figcaption>
+    </figure>
+    <p>The high level idea is that causal self attention is where one position brings in information from earlier positions. For example, the fifth (“is”) might pull in information from “capital” and “France” so that eventually the model can predict “Paris” as the next token. Think of this as each position paying a certain amount of attention to each prior position. We’ll get into the details below.</p>
+    <p>MLP is where learning <em>within</em> a position happens. We’ll look at it first because you’ve already seen an MLP, I just avoided the term. The MLP operates only within a position. To emphasize what I mean, it will perform an identical operation on each row of its input, but it will <strong>never</strong> mix information between rows.</p>
+    <p>Keep in mind that the example tensor in <a href="#fig-13-3" class="xref" data-preview="images/RC142.png">figure 13.3</a> is only the input to the first block. For each successive block, the input will be the output of the prior block. It may be useful to think of each position as containing a token embedding, as shown above. However, after the first block this is no longer true. Instead, think of each position as containing a vector of size 1280 that somehow represents the sequence up to and including that position. In a sense, the successive layers take us from encoding the meaning of individual words (tokens) to encoding the meaning of the entire length of text up to a given position. (Casually, though, you will hear people talking about the <em>embeddings</em> out of say layer ten and that’s fine.) </p>
+    <p>MLP stands for <strong>multilayer perceptron</strong>. I’ve avoided saying that up to now because the term makes it sound more complicated than it is. Hedgehog model #4 shown in <a href="chapter-10.html#fig-10-18" class="xref" data-preview="images/RC107.png">figure 10.18</a>, where we made a linear-ReLU-linear sandwich, was an MLP. Here’s the MLP inside our transformer:</p>
+    <figure id="fig-13-4">
+      <input type="checkbox" id="lb-160" class="lightbox-toggle">
+      <label for="lb-160"><img src="images/RC143.png" alt="" loading="lazy"></label>
+      <label for="lb-160" class="lightbox-overlay"><img src="images/RC143.png" alt=""></label>
+      <figcaption>Figure 13.4. Inside the MLP.</figcaption>
+    </figure>
+    <p>In hedgehog model #4, the initial linear transformation took us from one number (length of hedgehog) to 10 numbers. In the MLP in our transformer, the linear transformation goes from D to 4 times D which in our example is 1280 to 5120. We then do ReLU, square that, and then the second linear transformation takes us back to 1280. We don’t use any bias terms in our linear layers, so sticking with our 1280 example, there will be 1280 × 5120 parameters in each of these two linear transforms. That’s over 13 million parameters together. Multiply that times the 20 layers and you’ll see that over 262 million parameters are in the MLPs. This is where a lot of learning will take place.</p>
+    <p>And I want to emphasize again, this is <strong>not only</strong>, or even mostly, learning about how to use the embedding of a single token/word to predict the next token. If that’s all that was happening, all of this high-dimensional (1280 in this case) information would be useless and we could just use the n-gram approach discussed in <a href="chapter-2.html" class="xref">chapter 2</a>. The vectors of size 1280 at each position represent and contain information from the entire sequence up to and including that position. You’ll see how soon.</p>
+    <p>In case things are getting confusing, let me work through a tiny example of the calculation where I assume D = 2 and T = 3.</p>
+    <figure id="fig-13-5">
+      <input type="checkbox" id="lb-161" class="lightbox-toggle">
+      <label for="lb-161"><img src="images/RC144.png" alt="" loading="lazy"></label>
+      <label for="lb-161" class="lightbox-overlay"><img src="images/RC144.png" alt=""></label>
+      <figcaption>Figure 13.5. MLP calculation example with D = 2.</figcaption>
+    </figure>
+    <p>You can’t verify the calculations because you don’t know the weights inside the linear transformations. I more want you to see how the column dimension expands from two to eight and then contracts back to two. Notice also that in the input the first position and third position are both [1.00, 2.00] and therefore they also match in the output [0.35, -0.78].</p>
+    <p>Now, finally, it’s time to get into the heart of the transformer—the head-spinning, beautiful concept that makes a transformer a transformer and represented by the blue box above: causal self-attention.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-12.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-14.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

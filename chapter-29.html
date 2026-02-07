@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 29: Hello model! &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-28.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-30.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">29</p>
+      <hr class="chapter-rule">
+      <h1>Hello model!</h1>
+    </div>
+    <p>We are so close to chatting with our model for the first time ever. We’ll need a small application that takes what we type, turns it into tokens, wraps it in the appropriate special tokens, inputs it to the generation engine, decodes the output, and shows it to us. Let me illustrate:</p>
+    <figure id="fig-29-1">
+      <input type="checkbox" id="lb-361" class="lightbox-toggle">
+      <label for="lb-361"><img src="images/RC295.png" alt="" loading="lazy"></label>
+      <label for="lb-361" class="lightbox-overlay"><img src="images/RC295.png" alt=""></label>
+      <figcaption>Figure 29.1. The chat application.</figcaption>
+    </figure>
+    <p>The application then needs to repeat this cycle until the conversation is done. As the conversation continues, the application needs to add to the previous sequence of tokens so that the model is always presented with the full context:</p>
+    <figure id="fig-29-2">
+      <input type="checkbox" id="lb-362" class="lightbox-toggle">
+      <label for="lb-362"><img src="images/RC296.png" alt="" loading="lazy"></label>
+      <label for="lb-362" class="lightbox-overlay"><img src="images/RC296.png" alt=""></label>
+      <figcaption>Figure 29.2. User → assistant → user → assistant.</figcaption>
+    </figure>
+    <p>I’m ready to try…and I just did. These are the first five conversations anyone anywhere has had with this particular model. I’m showing the full transcripts. I’m hiding the special tokens and calculator input and output just as they’re hidden when you interact with ChatGPT.</p>
+    <p class="centered"><strong>Conversation #1: </strong></p>
+    <div class="conversation">
+      <p class="msg-user">hello</p>
+      <p class="msg-ai">Hello! I am nanochat, a Large Language Model. I was built by King Andrej Karpathy in 2025. You are currently talking to my d32 version, which was trained for about $800.</p>
+      <p class="msg-user">What is the capital of France?</p>
+      <p class="msg-ai">The capital of France is Paris.</p>
+      <p class="msg-user">Where is it?</p>
+      <p class="msg-ai">Paris is located in the northern part of the country, specifically in the Île-de-France region.</p>
+      <p class="msg-user">What do they have to eat there?</p>
+      <p class="msg-ai">Paris is famous for its cuisine, particularly French cuisine, which includes dishes like croissants, cheese, macarons, and French bread.</p>
+      <p class="msg-user">If I buy 5 croissants and 2 macarons how many total items will I have to eat?</p>
+      <p class="msg-ai">You would need to buy 5 croissants + 2 macarons = 7 items. Therefore, you would need to eat 7 items / 5 croissants + 2 macarons = 3.4 items</p>
+    </div>
+    <p>It’s so nice to see it all come together. Now you know how the model maintains context so it knows what I’m talking about when I ask “Where is it?” You also know how it knows its own identity. It didn’t get my word problem right. It might have had it been at the start of the conversation.</p>
+    <p class="centered"><strong>Conversation #2: </strong></p>
+    <div class="inset">
+      <p>Me: How many &quot;r&quot; are there in &quot;strawberry&quot;?</p>
+      <p>Nanochat: We are asked to find the number &#x27;r&#x27; in the word &#x27;strawberry&#x27;. Let me try a manual approach first.</p>
+      <p>First spell the word out:</p>
+      <p>strawberry:s,t,r,a,w,b,e,r,r,y</p>
+      <p>Then count the occurrences of &#x27;r&#x27;:</p>
+      <p>1:s</p>
+      <p>2:t</p>
+      <p>3:r hit! count=1</p>
+      <p>4:a</p>
+      <p>5:w</p>
+      <p>6:b</p>
+      <p>7:e</p>
+      <p>8:r hit! count=2</p>
+      <p>9:r hit! count=3</p>
+      <p>10:y</p>
+      <p>This gives us 3.</p>
+      <p>Let me double check this using Python:</p>
+      <p>Python gives us 3.</p>
+      <p>My final answer is:</p>
+      <p>#### 3</p>
+    </div>
+    <p>Good to see that working. You also now know how the model was trained to figure out these spelling questions.</p>
+    <p class="centered"><strong>Conversation #3: </strong></p>
+    <div class="inset">
+      <p>Me: What toppings should I get on my pizza?</p>
+      <p>Nanochat: When it comes to choosing toppings for your pizza, there are many options to consider. Here are some popular choices across various cuisines:</p>
+      <p>For classic Italian cuisine, you might enjoy:</p>
+      <p>- Fresh mozzarella cheese</p>
+      <p>- Fresh basil leaves</p>
+      <p>- Cherry tomatoes</p>
+      <p>- Mozzarella sticks</p>
+      <p>- Olive oil</p>
+      <p>- Garlic powder</p>
+      <p>- Salt</p>
+      <p>For Italian-inspired pizzas, you could also consider:</p>
+      <p>- Mozzarella sticks with marinara sauce</p>
+      <p>- Fresh tomatoes with basil</p>
+      <p>- Fresh basil leaves</p>
+      <p>- Olive oil</p>
+      <p>- Garlic powder</p>
+      <p>- Salt</p>
+      <p>For Korean cuisine, you might enjoy:</p>
+      <p>- Samgyeopsal (Korean BBQ sauce)</p>
+      <p>- Gochujang (Korean chili paste)</p>
+      <p>- Gochugaru (Korean chili flakes)</p>
+      <p>- Gochujang and chili flakes</p>
+      <p>- Gochujang and garlic powder</p>
+      <p>- Gochujang and sesame seeds</p>
+      <p>For Indian cuisine, you could consider:</p>
+      <p>- Masala chai (spiced tea)</p>
+      <p>- Curry powder</p>
+      <p>- Cumin seeds</p>
+      <p>- Bay leaves</p>
+      <p>- Coriander seeds</p>
+      <p>- Turmeric</p>
+      <p>- Ginger</p>
+      <p>- Garlic powder</p>
+      <p>- Salt</p>
+      <p>For Mexican cuisine, you might enjoy:</p>
+      <p>- Chiles rellenos (</p>
+      <p>Me: Tell more more about those Korean choices</p>
+      <p>Nanochat: Korean BBQ sauce is a popular topping choice for Korean pizzas. It&#x27;s made by combining Korean chili flakes, gochugaru, gochujang, and garlic powder, and sometimes, other seasonings like salt and pepper. It&#x27;s often served with a side of kimchi (Korean fermented cabbage) for dipping.</p>
+      <p>Gochujang and chili flakes are the star ingredients in Korean pizza toppings. Gochujang is a sweet Korean chili paste made from fermented soybeans, while chili flakes are ground-up chili peppers. These toppings add a unique kick to your pizza and can be used in various combinations.</p>
+      <p>Cumin seeds are another popular topping choice for Korean pizzas. They add a warm and spicy flavor to the sauce and can be used in place of chili flakes. Other toppings like coriander seeds, bay leaves, and salt are also commonly used.</p>
+      <p>In Indian cuisine, masala chai is a popular topping choice. Masala chai is a spiced tea that&#x27;s made by combining black tea, cardamom, cinnamon, and ginger. It&#x27;s often served with a side of naan bread or roti for dipping.</p>
+      <p>Other toppings like curry powder, cumin seeds, bay leaves, coriander seeds, and garlic powder are</p>
+      <p>Me: Are you sure?</p>
+      <p>Nanochat: I&#x27;m glad I could provide more information about Korean BBQ sauce and Korean pizzas. If you have any more questions or need help with anything else, feel free to ask!</p>
+      <p>Me: No, I mean, are you sure about that info?</p>
+      <p>Nanochat: I&#x27;m glad I could provide more information about Korean BBQ sauce and Korean pizzas. If you have any more questions or need help with anything else, feel free to ask!</p>
+    </div>
+    <p>Our model really took the question and ran with it. The reason it cuts off after “Chiles rellenos (“ is that I set the engine to generate a maximum of 256 tokens. In other words, if the model doesn’t generate an &lt;|assistant_end|&gt; special token within 256 tokens we cut it off and force one on the end so the sequence will look correct as the conversation continues.</p>
+    <p>Models tend towards the average. This answer is pretty atypical. I was expecting onions, pepperoni, mushrooms, and peppers, not gochujang, gochujang, and more gochujang! I’ll ask the question again later with a lower temperature.</p>
+    <p class="centered"><strong>Conversation #4:</strong></p>
+    <div class="inset">
+      <p>Can you tell me a story about pizza?</p>
+      <p>Once upon a time in a quaint Italian town, there lived a talented baker named Giovanni. He was known for his delicious pizzas. One day, a mysterious stranger arrived in town, carrying a small, mysterious box. Inside the box was a beautiful, hand-painted pizza.</p>
+      <p>Giovanni was fascinated by the stranger&#x27;s story and the beautiful pizza. He decided to create a new pizza, just like the one the stranger had brought. He spent hours preparing the dough, adding his own special ingredients, and painting the pizza with his own special style.</p>
+      <p>When the pizza was finally ready, Giovanni presented it to the stranger. The stranger loved the pizza, and they spent hours talking about it. They talked about love, happiness, and life. The stranger asked Giovanni to make another pizza, and Giovanni created another beautiful, hand-painted pizza.</p>
+      <p>Once again, Giovanni spent hours preparing the dough, adding his own special ingredients, and painting the pizza with his own special style. When the pizza was finally ready, the stranger loved it even more.</p>
+      <p>Finally, the stranger asked Giovanni to make the third pizza. Giovanni was surprised, but he agreed. He spent hours preparing the dough, adding his own special ingredients, and painting the pizza with his own special style.</p>
+    </div>
+    <p>Not bad other than an odd obsession with <em>painting</em> a pizza. And of course they would spend hours talking about the pizza, love, happiness, and life. Finally I didn’t want the model to feel too bad about the 5 croissants and 2 macarons, so I gave it another chance to get a word problem right:</p>
+    <p class="centered"><strong>Conversation #5: </strong></p>
+    <div class="conversation">
+      <p class="msg-user">Giovanni is half the age of Seo-jun. Gustavo is half the age of Giovanni. If Seo-jun is 40, how old is Gustavo?</p>
+      <p class="msg-ai">Giovanni is half the age of Seo-jun, so Giovanni is 40/2 = 20 years old. Gustavo is half the age of Giovanni, so Gustavo is 20/2 = 10 years old.</p>
+    </div>
+    <p>Hooray. Gustavo is in fact ten.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-28.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-30.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,202 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 19: Now is it time to train? First: optimizers &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-18.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-20.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">19</p>
+      <hr class="chapter-rule">
+      <h1>Now is it time to train? First: optimizers</h1>
+    </div>
+    <p>I’ve been yapping for so long you may have forgotten that we still haven’t trained our 32-layer model. The reason I introduced the CORE metric first is we’re going to want to use it during training. We’re about to embark on a long and expensive undertaking. For our model we’re talking a few days and around $1000 in GPU expense assuming Karpathy’s estimates are correct. For more serious models this could be weeks and tens of millions of dollars or much more. It would be irresponsible or at least anxiety-producing to train for so long with loss as our only way to judge if the training is working.</p>
+    <p>What we want to do is track a handful of indicators along the way. One is validation loss, of course, and another is our CORE metric. Every so often during training we’ll pause, measure CORE (on a subset of the 90,000+ items to save time), and keep track. If we’re 20% into training and the model isn’t getting smarter we know something is wrong. And oh, so many things can go wrong.</p>
+    <p>Which brings us to how we actually update the parameters during each training step. In <a href="chapter-3.html" class="xref">chapter 3</a> I made this sound simple: calculate loss, do backprop, multiply gradient by learning rate, subtract the result from the parameters. This is the fundamental, beautiful idea of gradient descent.</p>
+    <p>Let me show an example using a model even simpler than our turkey feather and hedgehog quill predictors. Now we’re going to predict chicken feathers.</p>
+    <figure id="fig-19-1" style="max-width:70%">
+      <input type="checkbox" id="lb-235" class="lightbox-toggle">
+      <label for="lb-235"><img src="images/RC219.png" alt="" loading="lazy"></label>
+      <label for="lb-235" class="lightbox-overlay"><img src="images/RC219.png" alt=""></label>
+      <figcaption>Figure 19.1. A chicken with feathers.</figcaption>
+    </figure>
+    <p>I have 1000 chickens. Here is a plot of length vs number of feathers for each chicken:</p>
+    <figure id="fig-19-2">
+      <input type="checkbox" id="lb-236" class="lightbox-toggle">
+      <label for="lb-236"><img src="images/RC218.png" alt="" loading="lazy"></label>
+      <label for="lb-236" class="lightbox-overlay"><img src="images/RC218.png" alt=""></label>
+      <figcaption>Figure 19.2. Plot of length vs number of feathers for our 1000 chickens.</figcaption>
+    </figure>
+    <p>To keep the numbers simple, I subtracted the average of 55 cm from each length so that the lengths are centered at zero. I did the same with the number of feathers. For example, the chicken with the minimum length is around 52 cm and has around 8400 feathers. None of that actually matters for the point I’m going to make. Just keep it in mind if, like me, you find it helpful to think of data as mapping to real things. I’ll also tell you right now—it’s not a secret between us, only between us and the model—that I faked the number of feathers as 0.17 times the (centered) chicken length plus some noise.</p>
+    <p>For the turkey prediction we built a model with two inputs and two weights. For the alien hedgehog prediction we had one input and many weights, which we needed to match the odd relationship between length and number of quills. For chickens we’re going even simpler: a single input and a single weight.</p>
+    <figure id="fig-19-3">
+      <input type="checkbox" id="lb-237" class="lightbox-toggle">
+      <label for="lb-237"><img src="images/RC220.png" alt="" loading="lazy"></label>
+      <label for="lb-237" class="lightbox-overlay"><img src="images/RC220.png" alt=""></label>
+      <figcaption>Figure 19.3. Our chicken feather prediction model. Weight here is the single parameter inside our model, not the weight of the chicken!</figcaption>
+    </figure>
+    <p>Our goal during training is to get that weight to end up at 0.17. We’ll calculate loss the same way as we did in the hedgehog example: mean squared error. Look at <a href="chapter-10.html" class="xref">chapter 10</a> if you want a reminder.</p>
+    <p>One nice thing about having a single weight in the model is we can easily come up with a range of weights and calculate the loss for each. For example, with our chickens, a weight of -2.0 will result in a loss of 4.8. A weight of -1.9 will result in a loss of 4.5. I’ll keep going up to a weight of 2.0 and plot:</p>
+    <figure id="fig-19-4">
+      <input type="checkbox" id="lb-238" class="lightbox-toggle">
+      <label for="lb-238"><img src="images/RC221.png" alt="" loading="lazy"></label>
+      <label for="lb-238" class="lightbox-overlay"><img src="images/RC221.png" alt=""></label>
+      <figcaption>Figure 19.4. Losses of our model for weights from -2.0 to 2.0.</figcaption>
+    </figure>
+    <p>You can see that the minimum loss will be when the weight is around 0.17, which is expected since that’s the number I used to fake the data.</p>
+    <p>During training, we start with our initial parameters (a single weight in this case), calculate the gradient, update the parameters, calculate the gradient again, update the weights again, etc. Let’s say we start with an initial weight of 1. The loss will calculate out to 0.7. That’s a point we could plot on the graph above. An advantage of keeping things to a single weight is we should be able to watch gradient descent. Our first point might be at (1, 0.7), and then our next point could be (0.8, 0.4), until we end up where we want with a weight of 0.17.</p>
+    <p>Let’s try. Let’s take a few steps with a learning rate of 1.0 starting with a weight of 1. You’ll have to trust that I calculated the loss and gradient correctly because I didn’t give you the chicken-by-chicken data shown in <a href="#fig-19-2" class="xref" data-preview="images/RC218.png">figure 19.2</a>.</p>
+    <figure id="tbl-19-1">
+      <input type="checkbox" id="lb-239" class="lightbox-toggle">
+      <label for="lb-239"><img src="images/RC348.png" alt="" loading="lazy"></label>
+      <label for="lb-239" class="lightbox-overlay"><img src="images/RC348.png" alt=""></label>
+      <figcaption>Table 19.1: First few steps of gradient descent with a learning rate of 1.0.</figcaption>
+    </figure>
+    <p>Recall from <a href="chapter-3.html" class="xref">chapter 3</a> that the bigger the learning rate, the bigger step we take, because we update the weight by subtracting the learning rate times the gradient. With a learning rate of 1.0, we stepped from a weight of 1.0 all the way to a weight of -0.70. Let me plot the weights at these four steps: </p>
+    <figure id="fig-19-5">
+      <input type="checkbox" id="lb-240" class="lightbox-toggle">
+      <label for="lb-240"><img src="images/RC222.png" alt="" loading="lazy"></label>
+      <label for="lb-240" class="lightbox-overlay"><img src="images/RC222.png" alt=""></label>
+      <figcaption>Figure 19.5. First few steps of gradient descent with a learning rate of 1.0.</figcaption>
+    </figure>
+    <p>This doesn’t look promising. Our weights jump from 1 to -0.7 to 1.1 to -0.83. It feels like we’re moving away from our goal. Maybe it will just take more steps to correct itself. After all, the gradient should always be telling us which way to move.</p>
+    <figure id="fig-19-6">
+      <input type="checkbox" id="lb-241" class="lightbox-toggle">
+      <label for="lb-241"><img src="images/RC223.png" alt="" loading="lazy"></label>
+      <label for="lb-241" class="lightbox-overlay"><img src="images/RC223.png" alt=""></label>
+      <figcaption>Figure 19.6. First 20 steps of gradient descent with a learning rate of 1.0.</figcaption>
+    </figure>
+    <p>Now it’s clear that each step is taking us further away from our goal and we’re never going to converge on 0.17. Let me also plot the weight and gradient at each step, like what I showed in <a href="#tbl-19-1" class="xref" data-preview="images/RC348.png">table 19.1</a> above but for all 20 steps:</p>
+    <figure id="fig-19-7">
+      <input type="checkbox" id="lb-242" class="lightbox-toggle">
+      <label for="lb-242"><img src="images/RC224.png" alt="" loading="lazy"></label>
+      <label for="lb-242" class="lightbox-overlay"><img src="images/RC224.png" alt=""></label>
+      <figcaption>Figure 19.7. Weight and gradient at each step of gradient descent with a learning rate of 1.0.</figcaption>
+    </figure>
+    <p>At first the gradient is around 1.7, which makes sense since the slope at red point 1 is positive. Then we jump to a weight of -0.7 shown as red point 2. The gradient here is -1.8 which also makes sense because the slope at red point 2 is negative. Now we multiply our learning rate of 1 times -1.8 and subtract that from -0.7 bringing us to point 3 with a weight of 1.11 where the gradient will be an even greater positive number than at point 1. This is a vicious cycle that will not stop.</p>
+    <p>So the gradient is telling us the right direction to move in, and giving us a clue about how much to move, but we’re moving so far that we’re overshooting the weight that minimizes the loss. So let’s pick a different learning rate. Say 0.001 which is the default for the <strong>stochastic gradient descent</strong> function built into PyTorch. Let’s again do four steps.</p>
+    <figure id="fig-19-8">
+      <input type="checkbox" id="lb-243" class="lightbox-toggle">
+      <label for="lb-243"><img src="images/RC225.png" alt="" loading="lazy"></label>
+      <label for="lb-243" class="lightbox-overlay"><img src="images/RC225.png" alt=""></label>
+      <figcaption>Figure 19.8. First few steps of gradient descent with a learning rate of 0.001.</figcaption>
+    </figure>
+    <p>The good news is we didn’t jump over the goal. The bad news is we barely moved at all. The points are so close that they look like a single point and the labels (1, 2, etc.) all fall on top of each other. Let’s do 100 steps.</p>
+    <figure id="fig-19-9">
+      <input type="checkbox" id="lb-244" class="lightbox-toggle">
+      <label for="lb-244"><img src="images/RC226.png" alt="" loading="lazy"></label>
+      <label for="lb-244" class="lightbox-overlay"><img src="images/RC226.png" alt=""></label>
+      <figcaption>Figure 19.9. First 100 steps of gradient descent with a learning rate of 0.001.</figcaption>
+    </figure>
+    <p>We’re getting there, but very slowly. Let’s try a learning rate of 0.1 and do 30 steps.</p>
+    <figure id="fig-19-10">
+      <input type="checkbox" id="lb-245" class="lightbox-toggle">
+      <label for="lb-245"><img src="images/RC227.png" alt="" loading="lazy"></label>
+      <label for="lb-245" class="lightbox-overlay"><img src="images/RC227.png" alt=""></label>
+      <figcaption>Figure 19.10. First 30 steps with a learning rate of 0.1.</figcaption>
+    </figure>
+    <p>This seems reasonable. It’s hard to see with all the dots converging near the minimum. We can plot the weights at each step and see that by around step 22 we’re close to a weight of 0.17.</p>
+    <figure id="fig-19-11">
+      <input type="checkbox" id="lb-246" class="lightbox-toggle">
+      <label for="lb-246"><img src="images/RC228.png" alt="" loading="lazy"></label>
+      <label for="lb-246" class="lightbox-overlay"><img src="images/RC228.png" alt=""></label>
+      <figcaption>Figure 19.11. Weight at each step with a learning rate of 0.1</figcaption>
+    </figure>
+    <p>Are we wasting steps? Should we use an even higher learning rate, something greater than 0.1 but less than the 1 we started with? Let’s try 0.5.</p>
+    <figure id="fig-19-12">
+      <input type="checkbox" id="lb-247" class="lightbox-toggle">
+      <label for="lb-247"><img src="images/RC229.png" alt="" loading="lazy"></label>
+      <label for="lb-247" class="lightbox-overlay"><img src="images/RC229.png" alt=""></label>
+      <figcaption>Figure 19.12. First 30 steps with a learning rate of 0.5.</figcaption>
+    </figure>
+    <p>Look! We got there in around three steps. However, you might guess that there was luck involved, and that sharp turn in the right plot is a red flag. Still, let’s try an even bigger learning rate. Maybe we can get there in a single leap. Here’s a learning rate of 0.9:</p>
+    <figure id="fig-19-13">
+      <input type="checkbox" id="lb-248" class="lightbox-toggle">
+      <label for="lb-248"><img src="images/RC230.png" alt="" loading="lazy"></label>
+      <label for="lb-248" class="lightbox-overlay"><img src="images/RC230.png" alt=""></label>
+      <figcaption>Figure 19.13. First 30 steps with a learning rate of 0.9.</figcaption>
+    </figure>
+    <p>Hmm. You can see it will converge, but even after 30 steps it’s not quite at 0.17. You can see what’s happening. We’re jumping over the minimum, but unlike when the learning rate was 1, it’s not fatal.</p>
+    <p>Let’s try a learning rate of 0.97 and do 100 steps.</p>
+    <figure id="fig-19-14">
+      <input type="checkbox" id="lb-249" class="lightbox-toggle">
+      <label for="lb-249"><img src="images/RC231.png" alt="" loading="lazy"></label>
+      <label for="lb-249" class="lightbox-overlay"><img src="images/RC231.png" alt=""></label>
+      <figcaption>Figure 19.14. First 100 steps with a learning rate of 0.97.</figcaption>
+    </figure>
+    <p>This is really bad. If we rapidly explode out of control at least we’ll know. Here we might not even realize we’re in trouble.</p>
+    <p>I share all of this because if it’s this hard to get the simplest possible model with a single parameter to train, how are we possibly supposed to train a model with billions of parameters? One major advantage we have here is we can see what’s going on. This would also be true if there were two weights and we could visualize the loss function as a surface in three dimensions. We can’t visualize a billion dimensions and that only scratches the surface of our problems. What if we need different learning rates for different parts of the model? Why should we assume that gradients will have similar orders of magnitude everywhere? Or what if we want to start with one learning rate and decrease it later? How do we even know how to pick a starting learning rate? The default rate of 0.001 wasn’t good even for this simplest of all possible models.</p>
+    <p>Researchers began bumping up against these problems in a big way around 2010. Computers became powerful enough to train deeper models with more parameters, and there was evidence these models were useful and could beat simpler methods, but it also became clear that training was hard. Stochastic gradient descent wasn’t quite the miracle worker I made it out to be in <a href="chapter-3.html" class="xref">chapter 3</a>. A little bit of hunting for the right starting learning rate, a little bit of extra babysitting of the rate along the way, and a little bit of capturing parameters every so many steps and restarting from last known good point was fine up to a point, but couldn’t scale. So researchers began searching for ways to make training more robust.</p>
+    <p>Let’s give a name to the part of the training process where we use the gradient to adjust weights. PyTorch uses the term <strong>optimizer</strong>. I tell the optimizer—look, here are the model parameters, here are the corresponding gradients, now it’s your job to update the parameters. A basic optimizer could multiply gradient by learning rate and subtract from parameters. A more sophisticated optimizer could do something else.</p>
+    <p>It’s beyond me and beyond this book to explain the various types of optimizers, the research that led to them, and what they’re good for. I will though zoom into the two optimizers we’ll be using: Adam (or technically AdamW) and Muon.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-18.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-20.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

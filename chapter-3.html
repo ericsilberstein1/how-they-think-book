@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 3: A basic model: predicting feathers &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-2.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-4.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">3</p>
+      <hr class="chapter-rule">
+      <h1>A basic model: predicting feathers</h1>
+    </div>
+    <p>When I was two weeks into playing with Nanochat, which we’re going to get to, we were out for a family dinner—Otto in Brookline, Massachusetts—and I wanted to explain to my high school sophomore daughter the idea of learning weights. We went back and forth over an example where we could keep the numbers in our heads while pizza was in our hands. I’m going to recreate the example here with a little more fake data since I can now write things down on this piece of screen.</p>
+    <p>In <a href="chapter-2.html" class="xref">chapter 2</a> we talked about models for predicting words. Now we’re going to build a model to predict the number of feathers on a turkey. Don’t ask. That’s just what came to mind when we were chatting. There are a lot of wild turkeys wandering around Newton, where we live, and this wasn’t all that long before Thanksgiving.</p>
+    <p>But more seriously—you’re going to encounter models for predicting turkey feathers, hedgehog quills, chicken feathers, and home prices in the coming chapters. You’ll have to trust me that I’m not leading you down needless tangents. I need to build up to the concepts underlying GPT models and we’ll both find it easier if I use specific, contrived examples instead of keeping everything abstract.</p>
+    <figure id="fig-3-1" style="max-width:90%">
+      <input type="checkbox" id="lb-8" class="lightbox-toggle">
+      <label for="lb-8"><img src="images/RC007.png" alt="" loading="lazy"></label>
+      <label for="lb-8" class="lightbox-overlay"><img src="images/RC007.png" alt=""></label>
+      <figcaption>Figure 3.1. The height and length of a turkey.</figcaption>
+    </figure>
+    <p>Think of this model as a machine. It takes two inputs: the height of the turkey and the length of the turkey. It gives one output: its prediction for the number of feathers.</p>
+    <figure id="fig-3-2">
+      <input type="checkbox" id="lb-9" class="lightbox-toggle">
+      <label for="lb-9"><img src="images/RC008.png" alt="" loading="lazy"></label>
+      <label for="lb-9" class="lightbox-overlay"><img src="images/RC008.png" alt=""></label>
+      <figcaption>Figure 3.2. A model to turn height and length into a prediction for number of feathers.</figcaption>
+    </figure>
+    <p>Without thinking too hard, it seems like we could multiply the height by some number, multiply the length by some other number, add those together, and that will be our prediction. Let’s call these numbers weights, as in the weights of the model.</p>
+    <p class="centered">Prediction = height × weight_1 + length × weight_2</p>
+    <p>Going forward, to make it a little easier to read, let’s write weight_1 as w1 and weight_2 as w2</p>
+    <p>Let’s also say we have data on three turkeys meaning we know their height, length, and number of feathers:</p>
+    <figure id="tbl-3-1" style="max-width:70%">
+      <input type="checkbox" id="lb-10" class="lightbox-toggle">
+      <label for="lb-10"><img src="images/RC009.png" alt="" loading="lazy"></label>
+      <label for="lb-10" class="lightbox-overlay"><img src="images/RC009.png" alt=""></label>
+      <figcaption>Table 3.1. Our turkey data. This data is NOT from real turkeys and not realistic AFAIK :)</figcaption>
+    </figure>
+    <p>If our model is any good, then:</p>
+    <ul>
+      <li>1 × w1 + 1.5 × w2 should be close to 5000</li>
+      <li>0.75 × w1 + 1.25 × w2 should be close to 3500</li>
+      <li>1.25 × w1 + 1 × w2 should be close to 4500</li>
+    </ul>
+    <p>People figured out the math for picking the best possible w1 and w2 in the early 1800s. However, we’re not going to worry about that. Instead we’ll purposely go about it in a way that will seem overcomplicated and expensive to compute because later on this technique will prove magical.</p>
+    <p>So what I said to my daughter over pizza was: Forget about finding the ideal w1 and w2 for the moment, just pick some random numbers. Mia picked 1000 and 3000. Great, calculate the prediction for turkey number 1:</p>
+    <p class="centered">1 × 1000 + 1.5 × 3000 = 5500</p>
+    <p>Wow! Not too bad. Can we quantify how good or bad it is? Mia said to subtract the actual number of feathers, so 5500 - 5000 = 500. Let’s do that for all three turkeys.</p>
+    <figure id="tbl-3-2">
+      <input type="checkbox" id="lb-11" class="lightbox-toggle">
+      <label for="lb-11"><img src="images/RC010.png" alt="" loading="lazy"></label>
+      <label for="lb-11" class="lightbox-overlay"><img src="images/RC010.png" alt=""></label>
+      <figcaption>Table 3.2. Actual number of feathers vs our model’s predictions using the weights randomly picked by my daughter.</figcaption>
+    </figure>
+    <p>Now we have a number that tells us how good or bad our prediction is for turkey #1, another number for turkey #2, and a third for turkey #3. I pointed out that if we pick new weights that improve the prediction for turkey #1 but make it much worse for turkey #2 that wouldn’t be so great. I asked how we could come up with a single number that said how good our prediction was across all three turkeys.</p>
+    <p>She said add the numbers together. If we nail all three predictions that number will be zero. But there’s a problem—if one prediction is way off in one direction, and another in the other, we’ll add a big negative and a big positive and get zero, but actually neither prediction is good. Take the absolute value she said. Yes! That way we treat -250 and 250 as the same thing, both 250 feathers away from the correct prediction.</p>
+    <p>At this point I stepped in and said, you know what, let’s square instead of taking the absolute value. Like absolute value it will take negative numbers and make them positive and it also has two other advantages which aren’t that important right now.</p>
+    <p>Now we’re talking about prediction minus actual for each turkey, the square of that, and the sum of those numbers. It’s going to get hard to keep having this discussion unless we give names to some of these numbers. I’ll do that in a table first and then explain.</p>
+    <figure id="tbl-3-3">
+      <input type="checkbox" id="lb-12" class="lightbox-toggle">
+      <label for="lb-12"><img src="images/RC011.png" alt="" loading="lazy"></label>
+      <label for="lb-12" class="lightbox-overlay"><img src="images/RC011.png" alt=""></label>
+      <figcaption>Table 3.3. Loss calculation.</figcaption>
+    </figure>
+    <p>The column labeled “prediction - actual” from <a href="#tbl-3-2" class="xref" data-preview="images/RC010.png">table 3.2</a> is now called <strong>error</strong>. That makes sense because it is the error in our prediction. For turkey #1 the prediction is 500 feathers too high, for turkey #2 it’s 1000 feathers too high, and for #3 we’re 250 short.</p>
+    <p>Squared error is what the name says, the square of the error. For example, 500<sup>2</sup> = 500 × 500 = 250,000.</p>
+    <p><strong>Loss</strong> is the sum of the squared errors. Think of it as how much are we losing in our predictions. The less the better. A loss of zero would mean we nail every prediction. Look at the table and see why that’s true—the only way the loss could be zero is if each prediction perfectly matches the actual number of feathers.</p>
+    <p>This single loss number is a beautiful thing. Even though we’ve got these two weights we’re trying to figure out, and this set of data with three turkeys, each of which has a height and a length and a number of feathers, we’ve now boiled the whole thing down to a single loss number. If we tweak our weights and the loss goes down, that’s good. If it goes up we’re moving in the wrong direction.</p>
+    <p>Speaking of, I told Mia to change one of the weights so we could see what happens to the loss. She increased w1 from 1000 to 2000:</p>
+    <figure id="tbl-3-4" style="max-width:50%">
+      <input type="checkbox" id="lb-13" class="lightbox-toggle">
+      <label for="lb-13"><img src="images/RC012.png" alt="" loading="lazy"></label>
+      <label for="lb-13" class="lightbox-overlay"><img src="images/RC012.png" alt=""></label>
+      <figcaption>Table 3.4. The new weights my daughter suggested.</figcaption>
+    </figure>
+    <p>And now calculate our predictions, errors, and loss with these new weights:</p>
+    <figure id="tbl-3-5">
+      <input type="checkbox" id="lb-14" class="lightbox-toggle">
+      <label for="lb-14"><img src="images/RC013.png" alt="" loading="lazy"></label>
+      <label for="lb-14" class="lightbox-overlay"><img src="images/RC013.png" alt=""></label>
+      <figcaption>Table 3.5. Loss with the new weights.</figcaption>
+    </figure>
+    <p>The loss went from around one million to around six million, so for sure these new weights made our prediction machine worse.</p>
+    <p>We could guess again, but it sure would be nice to have a clue about which direction to move each weight in. If we increase w1 a little bit, will the loss go up (bad) or down (good)? What about w2? That type of question might sound familiar from high school calculus. You were shown an equation like this:</p>
+    <p class="centered">f(x) = x<sup>2</sup></p>
+    <p>And asked a question like if x is 3 and it increases by a tiny amount, what happens to f(x)? You figured that out by taking the <strong>derivative</strong> of x<sup>2</sup>, which is 2x. Don’t worry if you don&#x27;t remember the rule. The important thing is to have an intuition for what it means. The derivative of f(x) is 2x, so at x = 3 the derivative is 6. This means if x increases by a tiny amount, f(x) will increase by 6 times that amount. Let’s look at this with actual numbers:</p>
+    <p class="centered">f(3) = 3<sup>2</sup> = 9</p>
+    <p>Let’s make our tiny amount 0.01. If we increase 3 by this tiny amount, we expect f(x) to increase by 6 times 0.01, so 0.06, so f(3.01) should be around 9.06.</p>
+    <p class="centered">f(3.01) = (3.01)<sup>2</sup> = 9.0601</p>
+    <p>To really jog your memory, in case this isn’t familiar, you can also think of the derivative of giving us the line tangent to the function at that point:</p>
+    <figure id="fig-3-3" style="max-width:50%">
+      <input type="checkbox" id="lb-15" class="lightbox-toggle">
+      <label for="lb-15"><img src="images/RC014.png" alt="" loading="lazy"></label>
+      <label for="lb-15" class="lightbox-overlay"><img src="images/RC014.png" alt=""></label>
+      <figcaption>Figure 3.3. Red is f(x) = x<sup>2</sup>, blue is the tangent at x = 3.</figcaption>
+    </figure>
+    <p>Okay, now forget about x and f(x) and let’s get back to figuring out how to tweak w1 and w2 to improve our turkey feather model. Since we want to take the derivative, let’s write out the loss in terms of w1 and w2 instead of plugging in the weights we guessed at above.</p>
+    <figure id="tbl-3-6">
+      <input type="checkbox" id="lb-16" class="lightbox-toggle">
+      <label for="lb-16"><img src="images/RC015.png" alt="" loading="lazy"></label>
+      <label for="lb-16" class="lightbox-overlay"><img src="images/RC015.png" alt=""></label>
+      <figcaption>Table 3.6. Error calculation using variables in place of hardcoded weights.</figcaption>
+    </figure>
+    <p>I left out the squared error to keep the table legible. Now let’s write out the whole equation.</p>
+    <div class="inset">
+      <p>loss = (turkey #1 error)<sup>2</sup> + (turkey #2 error)<sup>2</sup> + (turkey #3 error)<sup>2</sup></p>
+      <p>loss = (5000 - ((1)(w1) + (1.5)(w2)))<sup>2</sup> + </p>
+      <p>(3500 - ((0.75)(w1) + (1.25)(w2)))<sup>2</sup> + </p>
+      <p>(4500 - ((1.25)(w1) + (1)(w2)))<sup>2</sup></p>
+    </div>
+    <p>You can multiply that all out by hand and combine like terms, or use an online calculator. Either way you’ll get this:</p>
+    <div class="inset">
+      <p>loss  = 3.125(w1)<sup>2</sup> + 7.375(w1)(w2) - 26500(w1) + 4.8125(w2)<sup>2</sup> - 32750(w2) + 57500000</p>
+    </div>
+    <p>Want some convincing we didn’t mess anything up? Plug in our original weights (1000 and 3000) and it should come out to 1,312,500. (I checked and it does.)</p>
+    <p>In our calculus example above, we calculated the derivative of f(x) with respect to x. That told us how a change in x affected f(x). Here we want the derivative of the loss, but with respect to what? w1? Or w2? We already know we care about both of them since we want to adjust both to get to the best model we can.</p>
+    <p>Here’s where we cross into territory that as far as I can remember we never learned in high school calculus, although when you get into it, you’ll see it’s less complicated than other high school calculus concepts.</p>
+    <p>We want to calculate the <strong>partial derivative</strong> of loss with respect to w1. (And we’ll also want to calculate the partial derivative of loss with respect to w2.) Think of this like if we hold w2 steady at say 3000, and we increase w1 a tiny bit, how much will the loss increase or decrease? We can calculate this just like a regular derivative if we treat w1 as our variable and w2 as a constant.</p>
+    <div class="inset">
+      <p>Partial derivative of loss with respect to w1 = 6.25(w1) + 7.375(w2) - 26500</p>
+      <p>Partial derivative of loss with respect to w2 = 7.375(w1) + 9.625(w2) - 32750</p>
+      <p>(You can either get these using an online calculator or by remembering a few rules from calculus.)</p>
+    </div>
+    <p>Evaluate the partial derivatives at w1=1000 and w2=3000:</p>
+    <div class="inset">
+      <p>Partial derivative of loss with respect to w1 = 6.25(1000) + 7.375(3000) - 26500 = 1875</p>
+      <p>Partial derivative of loss with respect to w2 = 7.375(1000) + 9.625(3000) - 32750 = 3500</p>
+    </div>
+    <p>We’re starting to deal with a lot of numbers again. Let’s stick them in a table so we don’t get confused.</p>
+    <figure id="tbl-3-7">
+      <input type="checkbox" id="lb-17" class="lightbox-toggle">
+      <label for="lb-17"><img src="images/RC016.png" alt="" loading="lazy"></label>
+      <label for="lb-17" class="lightbox-overlay"><img src="images/RC016.png" alt=""></label>
+      <figcaption>Table 3.7. Partial derivatives of loss with respect to our two weights.</figcaption>
+    </figure>
+    <p>If we increase w1 a little bit, loss will go up by around 1875 times that little bit. So we should <em>decrease</em> w1. If we increase w2 a little bit, loss will go up by 3500 times that little bit. So we should also <em>decrease</em> w2. Now we know in what direction to adjust w1 and w2, but not how much of an adjustment to make. If we adjust by a very small amount the loss will barely change. If we adjust by a huge amount we might overshoot the optimal value. We’ll get into this more later, but for now, assume we have something called a <strong>learning rate</strong> which we’ll set to 1% (0.01). The way we use the learning rate is by adjusting each weight by its partial derivative times the learning rate. This way we’ll take larger jumps when w1 and w2 are far away from optimal, and smaller jumps when we’re closer. Again, we’ll come back to this.</p>
+    <p>Does <em>adjust</em> mean add or subtract? If the derivative is positive we need to decrease the weight, so we should adjust by <strong>subtracting</strong> the partial derivative times the learning rate. Let’s do this:</p>
+    <div class="inset">
+      <p>Updated w1 = 1000 - (0.01)(1875) = 981</p>
+      <p>Updated w2 = 3000 - (0.01)(3500) = 2965</p>
+    </div>
+    <p>Calculate the loss using those weights and add that all to the table:</p>
+    <figure id="tbl-3-8">
+      <input type="checkbox" id="lb-18" class="lightbox-toggle">
+      <label for="lb-18"><img src="images/RC017.png" alt="" loading="lazy"></label>
+      <label for="lb-18" class="lightbox-overlay"><img src="images/RC017.png" alt=""></label>
+      <figcaption>Table 3.8. Loss with our updated weights. It went down!</figcaption>
+    </figure>
+    <p>Hooray! Loss came down. Plug the new w1 and w2 into our partial derivative equations above and we can add the partial derivatives at these new weights to the table too:</p>
+    <figure id="tbl-3-9">
+      <input type="checkbox" id="lb-19" class="lightbox-toggle">
+      <label for="lb-19"><img src="images/RC018.png" alt="" loading="lazy"></label>
+      <label for="lb-19" class="lightbox-overlay"><img src="images/RC018.png" alt=""></label>
+      <figcaption>Table 3.9. Partial derivatives of our new weights.</figcaption>
+    </figure>
+    <p>The partial derivatives are both still positive, so we want to decrease both w1 and w2 again. I also added a <em>step</em> column. Let’s update the weights again exactly as we did above:</p>
+    <figure id="tbl-3-10">
+      <input type="checkbox" id="lb-20" class="lightbox-toggle">
+      <label for="lb-20"><img src="images/RC019.png" alt="" loading="lazy"></label>
+      <label for="lb-20" class="lightbox-overlay"><img src="images/RC019.png" alt=""></label>
+      <figcaption>Table 3.10. Repeat again.</figcaption>
+    </figure>
+    <p>Our loss is under a million! Let’s do a thousand steps. I’ll only show some of them in the table.</p>
+    <figure id="tbl-3-11">
+      <input type="checkbox" id="lb-21" class="lightbox-toggle">
+      <label for="lb-21"><img src="images/RC020.png" alt="" loading="lazy"></label>
+      <label for="lb-21" class="lightbox-overlay"><img src="images/RC020.png" alt=""></label>
+      <figcaption>Table 3.11. Loss after 1000 steps of updating our weights.</figcaption>
+    </figure>
+    <p>We might have hoped for a loss of zero, but that’s probably not possible because we have three turkeys and two weights. 133,190 seems a lot better than 1,312,500. Let’s make predictions with w1=2311 and w2=1633:</p>
+    <figure id="tbl-3-12">
+      <input type="checkbox" id="lb-22" class="lightbox-toggle">
+      <label for="lb-22"><img src="images/RC021.png" alt="" loading="lazy"></label>
+      <label for="lb-22" class="lightbox-overlay"><img src="images/RC021.png" alt=""></label>
+      <figcaption>Table 3.12. Prediction for all three turkeys using our final weights.</figcaption>
+    </figure>
+    <p>We’re only off by 22 feathers on turkey #3. For turkey #1 we’re short 240 feathers, and for turkey #2, we’re over by 275 feathers. Much better than where we started.</p>
+    <p>You may be itching to know how close we got to the optimal answer. In the future we’ll work with models where that’s tricky or impossible to figure out. Here, though, it’s easy to compute the w1 and w2 that minimize loss. As I mentioned above, people figured out how to solve these problems in the early 1800s and without doing 1000 steps of computation. Set both partial derivatives above to 0 and you’ll have two equations and two variables. Solve for w1 and w2 and you’ll get (rounded to nearest whole number):</p>
+    <div class="inset">
+      <p>w1 = 2347</p>
+      <p>w2 = 1604</p>
+    </div>
+    <p>We got close. Let’s plug those weights in:</p>
+    <figure id="tbl-3-13">
+      <input type="checkbox" id="lb-23" class="lightbox-toggle">
+      <label for="lb-23"><img src="images/RC022.png" alt="" loading="lazy"></label>
+      <label for="lb-23" class="lightbox-overlay"><img src="images/RC022.png" alt=""></label>
+      <figcaption>Table 3.13. Prediction for all three turkeys using the optimal weights.</figcaption>
+    </figure>
+    <p>You also may be wondering if we could have gotten even closer to the optimal weights if we used a smaller learning rate and/or more steps. The answer is yes.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-2.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-4.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,122 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 22: RMS Normalization &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-21.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-23.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">22</p>
+      <hr class="chapter-rule">
+      <h1>RMS Normalization</h1>
+    </div>
+    <p>I never explained exactly what calculation happens in the norm module or why it’s there. I was originally going to discuss it earlier, but decided to postpone until you saw that gradient descent is not always a walk in the park—sometimes it’s a walk off a cliff. Gradients can explode or vanish, and in an attempt to dodge those bullets, a tiny learning rate can cause the taking of such small steps that little progress is made toward minimizing loss.</p>
+    <figure id="fig-22-1">
+      <input type="checkbox" id="lb-278" class="lightbox-toggle">
+      <label for="lb-278"><img src="images/RC380.png" alt="" loading="lazy"></label>
+      <label for="lb-278" class="lightbox-overlay"><img src="images/RC380.png" alt=""></label>
+      <figcaption>Figure 22.1. What exactly does norm do?</figcaption>
+    </figure>
+    <p>Take a look at our turkey model from <a href="chapter-3.html" class="xref">chapter 3</a>. My data was the height and length of each turkey in meters which meant that the two inputs for each turkey were of a similar magnitude. Imagine, though, that I had used millimeters for height and stayed with meters for length. The purist in me thinks it shouldn’t matter. If the height number is a thousand times bigger, the model can just learn a number for the first weight that is a thousand times smaller. In practice, though, it does matter. A tiny change in the first weight would cause a much, much bigger change in the loss than a tiny change in the second weight. When the gradient is huge in one direction and small in another it’s tough to adjust our weights. If we use a small learning rate, we’ll move a healthy amount in one direction and barely at all in the other. If we use a big learning rate, we risk overshooting or having the gradient explode, similar to what I showed in <a href="chapter-19.html#fig-19-6" class="xref" data-preview="images/RC223.png">figure 19.6</a>.</p>
+    <p>Let me share a less contrived and more practical example. Zillow is famous for their Zestimate prediction of home value. If you’re building a model to predict home values, square footage and the price of recent nearby sales would be two of many inputs. Square footage and nearby home values are typically different by two to three orders of magnitude (e.g. 2,200 square feet vs 410,000 dollars). The first instinct of a data scientist building a home prediction model would be to account for these magnitude differences by <strong>normalizing</strong> the inputs.</p>
+    <p>Normalization means to adjust numbers so they are comparable. There is no single way to do it. If you’re a teacher and you give a test with 20 questions and another with 50 questions and you convert the number of correct questions into a percentage, that’s a form of normalization. The softmax function we looked at in <a href="chapter-8.html#tbl-8-10" class="xref" data-preview="images/RC309.png">table 8.10</a> is a type of normalization that converts numbers to a probability distribution. Another very common method of normalization is to subtract the mean and divide by the standard deviation. This would be a completely reasonable approach for my turkey heights and lengths and then no matter what units (e.g. meters or millimeters) I used, I would have clean inputs to the model with numbers of the same magnitude centered at zero. This could also work for square footage and home values. The importance of normalizing model inputs has been understood in at least some form since the mid-1800s.</p>
+    <p>Now let’s think about a model with many layers. If out of control numbers are problematic in the overall input to a model, they will also be problematic as the input to any layer. For example, imagine a model where the input to the tenth layer is a vector of size 200. Say that, looking across a whole batch of training data, a hundred of the dimensions are mostly between 0 and 1 and the other hundred are mostly between 1,000,000 and 2,000,000, due not to unwieldy input data but to cascading multiplications in the first nine layers. Training the linear transform in this tenth layer will now have the same problem I described above when we specified the turkey height in millimeters, but likely worse, because here we’re dealing with 200 dimensions.</p>
+    <p>Researchers began bumping up against this problem as models became deeper, especially in the years following AlexNet’s win of the ImageNet competition in 2012 covered in <a href="chapter-12.html" class="xref">chapter 12</a>. Initial solutions focused on thoughtful weight initialization and careful selection of learning rates to prevent numbers from getting out of control. People must have had the thought—at least in passing—of normalizing the input to each sublayer. They may have initially dismissed these thoughts because they went against the intuition that the model is being trained to perform a complex function and it could only make things harder to keep messing with the sublayer inputs (by say rescaling or recentering) along the way. Also, unlike with preprocessing input data, it must have seemed complicated and expensive to normalize sublayer inputs—where would the mean and standard deviation, for example, come from? It’s a chicken and egg problem.</p>
+    <p>In 2014, an image recognition model from Google codenamed Inception proved its mettle by winning one of the categories of the ImageNet competition. A few months later, in early 2015, Sergey Ioffe and Christian Szegedy, who was the lead researcher on the Inception model, proved they could beat their winning results by inserting normalization layers into the network. The technique caught on immediately. ResNet, which as discussed in <a href="chapter-12.html" class="xref">chapter 12</a> won the 2015 ImageNet competition, used normalization layers. The original transformer from 2017 shown in <a href="chapter-6.html#fig-6-2" class="xref" data-preview="images/RC051.png">figure 6.2</a> also used normalization layers, and as you’ve seen above, our modern GPT model uses them.</p>
+    <p>I won’t go into the details of the normalization approach developed by Ioffe and Szegedy and used in ResNet or even the simplified approach used in the original transformer and many other models. As seems to often happen, a new technique gets invented and proves itself empirically before researchers are able to isolate exactly why the technique works. And once they do, a sometimes even simpler approach proves even more effective. So I’ll briefly explain <strong>RMSNorm</strong> which was developed by Biao Zhang, then a PhD student at the University of Edinburgh and now a research scientist at Google, and Rico Sennrich, a professor at the University of Zurich. All of the normalization layers in our model, in both the transformer block and the causal self attention block, use RMSNorm.</p>
+    <p>The calculation is in the name: Root Mean Square Layer Normalization. Square each element in the vector, take the mean, take the square root, and divide this into each element. The beauty of Zhang and Sennrich’s research, and prior research into layer normalization, was to show that, counterintuitively to people at the time, this all you need to do—no need to calculate the mean or standard deviation on a bigger sample of data flowing through the model and no need to learn any parameters.</p>
+    <p>Let me first show the calculation in a table. Let’s say D=1280. Think of a single embedding, say for the token “Paris,” coming out of the embedding layer and entering the first transformer block as shown in <a href="#fig-22-1" class="xref" data-preview="images/RC380.png">figure 22.1</a> above.</p>
+    <figure id="tbl-22-1">
+      <input type="checkbox" id="lb-279" class="lightbox-toggle">
+      <label for="lb-279"><img src="images/RC377.png" alt="" loading="lazy"></label>
+      <label for="lb-279" class="lightbox-overlay"><img src="images/RC377.png" alt=""></label>
+      <figcaption>Table 22.1. The calculation of RMSNorm for a vector of size 1280.</figcaption>
+    </figure>
+    <p>If the mean of the input vector is zero, this calculation is the same as the type of normalization I described above where you subtract the mean and divide by the standard deviation. A geometric way to think about the calculation is that it preserves the angle of the vector but forces its length to be the square root of its size, 35.78 in this case. This is easier to see if we pretend that our vectors have two dimensions:</p>
+    <figure id="tbl-22-2" style="max-width:70%">
+      <input type="checkbox" id="lb-280" class="lightbox-toggle">
+      <label for="lb-280"><img src="images/RC379.png" alt="" loading="lazy"></label>
+      <label for="lb-280" class="lightbox-overlay"><img src="images/RC379.png" alt=""></label>
+      <figcaption>Table 22.2. Three two-dimensional vectors before and after normalization.</figcaption>
+    </figure>
+    <p>I’ll plot each vector before and after RMS normalization:</p>
+    <figure id="fig-22-2">
+      <input type="checkbox" id="lb-281" class="lightbox-toggle">
+      <label for="lb-281"><img src="images/RC378.png" alt="" loading="lazy"></label>
+      <label for="lb-281" class="lightbox-overlay"><img src="images/RC378.png" alt=""></label>
+      <figcaption>Figure 22.2. Plots of vectors A, B, and C before and after normalization.</figcaption>
+    </figure>
+    <p>Notice that the angles are the same after normalization but the lengths change dramatically. Before normalization vector C extends almost to (-30, -30). After normalization all three vectors have a length of 1.4 (the square root of 2).</p>
+    <p>(Here’s why the length works out to be the square root of the size of the vector. The length—specifically the Euclidean distance also known as the L2 norm—of a vector is the square root of the sum of the squares of its components. This is the Pythagorean theorem. With RMSNorm we divide each component by the square root of the <strong>mean</strong>. The square root of the mean is the same thing as the square root of the sum divided by the square root of the size of the vector. Zhang and Sennrich did experiment with dividing by the vector length instead, which seems simpler and more standard. This would also preserve angle but cause all lengths to be 1. Their experiment did not achieve good results. I don’t understand why since the exact same information seems to be present.)</p>
+    <p>If you look back at the whole model in <a href="chapter-16.html#fig-16-1" class="xref" data-preview="images/RC184.png">figure 16.1</a> you’ll see that you now know exactly what happens in every box. We’re now so close to performing all those operations on around 40 billion tokens worth of text to train our 32-layer model. First, though, I want to cover how we’ll use multiple GPUs so we can complete the training in days instead of weeks.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-21.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-23.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

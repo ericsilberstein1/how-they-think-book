@@ -1,0 +1,228 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 2: Is that a spelling error? &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-1.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-3.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">2</p>
+      <hr class="chapter-rule">
+      <h1>Is that a spelling error?</h1>
+    </div>
+    <p>In 1996 I did a summer internship at Microsoft with the Word group. I guess my boss, or the recruiter, or someone thought I did a decent job because when I asked if I could intern in Beijing the following year they said yes.</p>
+    <p>When I arrived in Beijing I was assigned to work with DongHui Zhang on an attempt to build the first spelling/grammar checker into the Chinese version of Word. China wasn’t yet a major market for Microsoft. I think the team hoped I’d be able to use my English and connections formed the prior year to get more support from the people in Redmond who definitely had about a thousand priorities other than hooking in Chinese proofing tools</p>
+    <p>We’ll get back to Chinese, and I promise this is all going to be relevant to ChatGPT. But let’s talk about spell checking in English first. A long time ago spell checking was pretty amazing, something like a killer feature, a reason to buy a word processor. ChatGPT lets anyone generate idiomatic text; spell checkers let anyone write a document without typos.</p>
+    <p>Is there a spelling error in this sentence?</p>
+    <p class="centered">He wnt to the store.</p>
+    <p>Yes. “Wnt” is a typo. Now if you were a software engineer (or maybe a programmer as they were called back then) working on the world’s first spell checker, how would you approach things? Maybe this:</p>
+    <ol>
+      <li>Make a big list of English words.</li>
+      <li>Break the sentence up into words. You’ll end up with “He,” “wnt,” “to,” “the,” and “store.”</li>
+      <li>Look for each word in the big list. If it’s not there, tell the user it’s a potential error.</li>
+    </ol>
+    <p>This all sounds pretty easy, although I doubt it was so easy back then. First you would have needed to jump through logistical, legal, and hard work hoops to assemble the big word list. Second, you can’t just split text into words by finding the spaces, you also have to deal with punctuation. Third, space to store information (e.g. the list of words) and processing power to do stuff would have been tight, so you would have had to be clever about how to store and access the words. Even back then users wouldn’t have wanted to wait all night to check spelling on a document.</p>
+    <p>To get a sense for scale, my Mac has a list of words. The file contains 235,976 words comprising 2,493,885 characters. The file is 2.4 megabytes. That’s probably less than a single jpg image on your phone, and yet it’s around six times the capacity of the floppy disks popular in the early 80s on computers like the IBM PC and Apple IIe. You can imagine that if your whole word processor needed to fit on a floppy disk, or maybe both sides of a floppy disk, or maybe even both sides of a few floppy disks, you couldn’t take up all the space with a big list of words. Some clever engineering was needed back then, just as it was needed more recently to train ChatGPT. And yes, the numbers are going to get much, much, much bigger.</p>
+    <figure id="fig-2-1" style="max-width:70%">
+      <input type="checkbox" id="lb-1" class="lightbox-toggle">
+      <label for="lb-1"><img src="images/RC001.png" alt="" loading="lazy"></label>
+      <label for="lb-1" class="lightbox-overlay"><img src="images/RC001.png" alt=""></label>
+      <figcaption>Figure 2.1. A 5.25” floppy disk I stole from my parents’ house over Thanksgiving. They won’t notice it’s gone. Each side holds 180 kilobytes. Do you know what that piece of red tape is for?</figcaption>
+    </figure>
+    <figure id="fig-2-2" style="max-width:60%">
+      <input type="checkbox" id="lb-2" class="lightbox-toggle">
+      <label for="lb-2"><img src="images/RC347.png" alt="" loading="lazy"></label>
+      <label for="lb-2" class="lightbox-overlay"><img src="images/RC347.png" alt=""></label>
+      <figcaption>Figure 2.2. A 1987 ad in MacUser magazine for a spell checker. I bet “directory” was supposed to be “dictionary.”</figcaption>
+    </figure>
+    <p>For fun, here are the first 10 words in that file on my Mac:</p>
+    <ul>
+      <li>A</li>
+      <li>a</li>
+      <li>aa</li>
+      <li>aal</li>
+      <li>aalii</li>
+      <li>aam</li>
+      <li>Aani</li>
+      <li>aardvark</li>
+      <li>aardwolf</li>
+      <li>Aaron</li>
+    </ul>
+    <p>And here are the last 10:</p>
+    <ul>
+      <li>zymotoxic</li>
+      <li>zymurgy</li>
+      <li>Zyrenian</li>
+      <li>Zyrian</li>
+      <li>Zyryan</li>
+      <li>zythem</li>
+      <li>Zythia</li>
+      <li>zythum</li>
+      <li>Zyzomys</li>
+      <li>Zyzzogeton</li>
+    </ul>
+    <p>Now back to Beijing 1997. Is there an error in this sentence?</p>
+    <p class="centered">他去了山店。</p>
+    <p>A Chinese speaker could tell right away that there is. The fourth character from the left is a typo. 山, which means mountain and is pronounced “shan” in Mandarin, doesn’t belong there. The correct character is 商, which is pronounced “shang” and means trade or business.</p>
+    <p>But how is the computer supposed to know that? There are no spaces between words in Chinese so splitting on spaces and looking up in a list of words isn’t really an option. We could split the sentence up into characters, “他”, “去”, etc. and make sure they are on a list, but that’s not very helpful because you can’t “spell” a single character wrong any more than you can type “A” or “B” wrong.</p>
+    <p>This was the dilemma facing the Chinese Word localization team. They wanted to point out spelling or grammar errors (think squiggly lines under words and phrases in old versions of Word) and to do so in a way that would be actually helpful to users, meaning it’s right most of the time and doesn’t miss much.</p>
+    <p>How does a human know that the “mountain” character is wrong? Let’s go back to English. Is there a problem with this sentence?</p>
+    <p class="centered">He walk to the store.</p>
+    <p>Yes. You know it right away. It sounds wrong. To be a little pedantic about it, you have a mental model of how English works, and as soon as you read “He walk,” that model is violated. You or a computer could potentially diagram out the sentence, figure out that “He” is the subject and “walk” is the verb and there is a disagreement based on some grammar rule, but you don’t need to do that, certainly not consciously, because you just know.</p>
+    <p>Is it always wrong?  Usually. But it could be intentional, and you would determine that with more context. For example in dialogue with a character who speaks that way:</p>
+    <div class="inset">
+      <p>“Where is he?” the detective asked the man who obviously had only just arrived in the country.</p>
+      <p>The man stepped out, shielded his eyes, and pointed toward the center of the town. “He walk to the store. He no come home.”</p>
+    </div>
+    <p>Context is important. This example already gets at a blurring of the lines–it’s impossible to draw a sharp distinction between context that is purely about language and context that is about information. When we as humans know that “He walk to the store” is likely intentional in this situation, it’s because we can understand the scene. That will be true for computers too.</p>
+    <p>Now back to Chinese. Say Chinese was your native language. Say the sentence was revealed to you one character at a time. First  “他” (ta) and you think okay. Then “他去,” (ta qu), okay, and your mind is anticipating “了” (le) could be next because that’s so common. And yes, that’s what you get next: “他去了.” Now you’re thinking, “he went”  – where did he go? Next comes “山” (shan = mountain), great he went to the mountains. Then “店” (dian), and no, no, that sounds totally wrong. There’s no such thing as “山店.” You’ve never seen those characters in that combination before.</p>
+    <p>And that was the key idea. Collect lots and lots of Chinese text, count up all the pairs and triplets of characters, and store that. Now when “山” comes along the computer can say, yup, I’ve seen that character “mountain” so many times before, and sometimes it’s followed by “east” as in Shandong province and sometimes it’s followed by “ding” as in the summit, and sometimes by “mouth” as in mountain pass, and even a few times in some chemistry texts by “nai” as in cyanide, but it’s never seen “店.” The probability that 山 is followed by 店 is so low according to the computer that it flags it as a potential error.</p>
+    <p>There are many subtle details and complications, but that’s the basic idea. Just as you have a mental model that tells you when language sounds right or wrong, this is a computer model of how language works. You can read about it, it’s called a bigram model, and it’s much simpler than the models we’ll get to later. For example, if we applied it on a word level in English to the text above, it could tell us that “He no” is a mistake, but it definitely can’t take into account information from earlier in the paragraph, like the detective showing up at a house.</p>
+    <p>To create a bigram model, we need lots of text, hopefully with a lot of variety. This is called a <strong>corpus</strong>. These days there are lots of openly available text collections and we could use one. Or even if not, we could scrape the internet. But in 1997 there just wasn’t that much Chinese text on the internet. People can write whatever they want in a word processor. You can imagine that if the corpus consists mostly of official language from newspapers and someone is writing a business document about hair care products, they’ll get lots of squiggly underlines identifying mistakes that are not in fact mistakes.</p>
+    <p>For this reason, one critical part of the work was finding digital text. Think of this less as scraping and more finding academic institutions and publishers with digital documents that could be copied, and finding linguists and computer scientists who had already been working on creating Chinese corpora. I don’t think I ever knew, and for sure don’t remember, the details of this part. I just remember a lot of going out and hunting for text.</p>
+    <p>What I do remember is many, many conversations with Donghui about bigram and trigram language models. Some were at the office, and many were at restaurants and at his apartment, him always smoking. He was excited about them and he got me excited. He correctly saw potential beyond the initial proofing tools we were building. Still, had he said that these bigram and trigram models would be a cousin of how computers would eventually learn to think I would have thought he was off his rocker.</p>
+    <p>Let’s work through an example because some of the ideas here are going to come back later. Pretend we visit a strange land where the only words in their language are:</p>
+    <ul>
+      <li>a</li>
+      <li>bed</li>
+      <li>he</li>
+      <li>house</li>
+      <li>is</li>
+      <li>man</li>
+      <li>red</li>
+      <li>store</li>
+      <li>the</li>
+      <li>to</li>
+      <li>went</li>
+    </ul>
+    <p>We search for all the written text in this land and find these sentences. This is our corpus.</p>
+    <ul>
+      <li>He is a man.</li>
+      <li>He went to the store.</li>
+      <li>He went to the house.</li>
+      <li>He went to bed.</li>
+      <li>The house is red.</li>
+    </ul>
+    <p>Count each word. You’ll get this:</p>
+    <figure id="tbl-2-1" style="max-width:50%">
+      <input type="checkbox" id="lb-3" class="lightbox-toggle">
+      <label for="lb-3"><img src="images/RC002.png" alt="" loading="lazy"></label>
+      <label for="lb-3" class="lightbox-overlay"><img src="images/RC002.png" alt=""></label>
+      <figcaption>Table 2.1. Counts of all words in all written text in this strange land.</figcaption>
+    </figure>
+    <p>Now count the pairs. For example, glancing at the sentences above, you see that “He went” occurs three times.</p>
+    <figure id="tbl-2-2" style="max-width:50%">
+      <input type="checkbox" id="lb-4" class="lightbox-toggle">
+      <label for="lb-4"><img src="images/RC003.png" alt="" loading="lazy"></label>
+      <label for="lb-4" class="lightbox-overlay"><img src="images/RC003.png" alt=""></label>
+      <figcaption>Table 2.2. Counts of pairs of words.</figcaption>
+    </figure>
+    <p>Notice that “he is” occurs once and “he went” occurs three times. So if we see “he,” we think there is a 25% chance that “is” comes next and a 75% chance that “went” comes next. Calculate this for all of the pairs:</p>
+    <figure id="tbl-2-3" style="max-width:70%">
+      <input type="checkbox" id="lb-5" class="lightbox-toggle">
+      <label for="lb-5"><img src="images/RC004.png" alt="" loading="lazy"></label>
+      <label for="lb-5" class="lightbox-overlay"><img src="images/RC004.png" alt=""></label>
+      <figcaption>Table 2.3. The probability of one word following another.</figcaption>
+    </figure>
+    <p>The probability column is calculated by taking the count of the pair and dividing it by the count of the first word.</p>
+    <p>Let’s say someone in this strange land writes a new sentence: “He went the store.” The first word is “he,” okay, that’s fine. The next word is “went,” yup, there’s a 75% chance of that, we’re still good. “Went” is followed by “the.” No, there’s a 0% chance of that, that’s bad. Keep going anyway. “The” is followed by “store.” There’s a 33% chance of that. Multiply all the probabilities together: 75% × 0% × 33% = 0%. So there is a 0% chance of this new sentence being legitimate.</p>
+    <p>You get the idea. Now another very important concept, one that will be front and center when we get to generative AI and how ChatGPT is able to write text, is that judging the probability of some text being right and generating new text are two sides of the same coin.</p>
+    <p>To see this, use the probabilities in the table above to generate new text. Start with “he” and choose the most probable next word: “went.” Now after “went” comes “to” and after “to” comes “the” and after “the” comes “house.” We’ve now generated a sentence: “He went to the house.” Sure, it happens to be one of the sentences in our corpus, but that’s not surprising with this tiny language. This also hints at how large language models like ChatGPT “accidentally&quot; memorized (stole?) and are able to regurgitate full newspaper articles: see the New York Times lawsuit against OpenAI.</p>
+    <p>If we start with “he” again and generate in the same way, always choosing the most likely next word, we’re going to end up with the exact same sentence. However, what happens if instead of choosing the most likely, we pick according to the probability? What I mean by “pick according to the probability” is that we pick randomly but weighted by the probability. If we have two options, and option A has a 75% probability and option B has a 25% probability, sure, we’re more likely to get A, but if we pick 100 times, about 25 of those times we’ll get B.</p>
+    <p>So based on random chance, we could generate “He went to the store” or “He is red” or a few other possibilities.</p>
+    <p>I want to give the standard terms for some of the concepts just covered. This will be useful when we get into other topics and if you want to look up this material. And like a lot of specialized things in life, at some point you have to learn the terminology or it becomes too difficult to communicate.</p>
+    <p><strong>Conditional probability</strong>. This sounds fancy, but all it really means is the probability of something being true given that something else is true, in other words, conditioned on that other thing. For example, if we pick a word totally at random from text in this tiny language, and ask, with no other information, for the probability that the word is “the,” it’s 3/22 or around 14%. Think of that like reaching your hand into a bucket of all the words from all the sentences and pulling one out. However, if we ask for the probability of “the” conditioned on the prior word being “to,” then that’s 67% as you can see in the table above. You’ll often see probability written as “P” and conditioned on indicated by a vertical bar. So P(“the”) = 14% and P(“the” | prior word is “to”) = 67%.</p>
+    <p>In actual English, “the” is the most common word, but the probability of a random word pulled out of text being “the” is more like 6%, not 14%. It’s still pretty amazing just how much we use “the” in English.</p>
+    <p>We’ll be talking a lot about <strong>vocabulary</strong>. In the example above, the vocabulary is all the words in our (very limited) language: a, bed, he, house, is, man, red, store, the, to, went. In the Chinese example, the vocabulary might be every known Chinese character. Soon we’ll get into how models like ChatGPT use tokens and then we’ll use <em>vocabulary</em> to mean all the possible tokens.</p>
+    <p>Another term that’s going to come up again is <strong>probability distribution</strong>. Without being too formal about it, it means the probability of each possibility, all of which add up to 100%. For example, if we have the word “the,” we want to know the probability distribution over the vocabulary for the next word. Here it is:</p>
+    <figure id="tbl-2-4">
+      <input type="checkbox" id="lb-6" class="lightbox-toggle">
+      <label for="lb-6"><img src="images/RC005.png" alt="" loading="lazy"></label>
+      <label for="lb-6" class="lightbox-overlay"><img src="images/RC005.png" alt=""></label>
+      <figcaption>Table 2.4. Example of a probability distribution.</figcaption>
+    </figure>
+    <p>This is coming directly from <a href="#tbl-2-3" class="xref" data-preview="images/RC004.png">table 2.3</a> except I added in the probabilities for all the other words in the vocabulary, all of which are 0%.</p>
+    <p>Here’s a table with the next word probability distributions for all of the words. I also added one more “word” into our vocabulary: &lt;eos&gt; meaning end of sentence, like a period. I brushed over this detail above, but without it, the probabilities in each row won’t add to 100%.</p>
+    <figure id="tbl-2-5">
+      <input type="checkbox" id="lb-7" class="lightbox-toggle">
+      <label for="lb-7"><img src="images/RC006.png" alt="" loading="lazy"></label>
+      <label for="lb-7" class="lightbox-overlay"><img src="images/RC006.png" alt=""></label>
+      <figcaption>Table 2.5. For each word down the first column, the row gives the probability distribution for the next word.</figcaption>
+    </figure>
+    <p>Read across the table. You can see that it fits with the very limited text in this strange land.</p>
+    <p>Another term you may hear is <strong>n-gram</strong>. Bigram is 2-gram, trigram is 3-gram, etc. You can play with the Google Books Ngram viewer which lets you see how the frequency of a word, a bigram, or a trigram changed over the years.</p>
+    <p>Creating a good quality bigram / trigram model is no big deal these days. Text is readily available and the memory to store the bigrams / trigrams and the computing power to make use of them is almost meaningless for a modern computer or phone.</p>
+    <p>N-grams are why you can type on your smartphone. Start typing and pay very close attention to the letters your fingers tap. Often they tap the wrong letter. But your phone is constantly calculating the probability and correcting you. Say you’re starting a sentence and type “t” and then your finger taps in between “g” and “h” on the touchscreen, perhaps even a little closer to “g.”  Your phone says—nope, the probability of “h” is so much higher after a “t” that “g” must be wrong. The letter that gets “typed” is “h” and you don’t even notice. You can try right now. If you don’t believe me that it’s impossible to type without this, read the wonderful book “Creative Selection” by Apple engineer Ken Kocienda.</p>
+    <p>Predictive text on your phone is the same idea operating at the word level. The phone watches what you’re typing. It’s constantly looking in a table similar to <a href="#tbl-2-3" class="xref" data-preview="images/RC004.png">table 2.3</a> to find the three or four words with the highest probability given the word or few words you’ve already typed. Then you as the user can tap the predicted word rather than typing it out.</p>
+    <p>And back to Chinese. English has 26 letters. Chinese has tens of thousands of characters. Each character is a syllable, and there can be dozens of characters that all share the same sound. For example, 他 “ta” the first word in our example sentence above means he. Other characters also pronounced “ta” include common ones like 她 (she), 它 (it), 塔 (tower), 踏 (to step on), and obscure ones like 铊 (thalium). Typing used to be a very specialized skill in China, one that required a lot of training and memorization, way more than learning where the letters are on an English keyboard. Professionals used the “5 stroke” method (look up “wubi”) which was based on the visual subcomponents of a character. These days, to type the example sentence above, you just type “taquleshangdian” and the computer uses its n-gram model to make an incredibly educated guess at which “ta,” which “qu,” which “le,” which “shang,” and which “dian” you mean.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-1.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-3.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

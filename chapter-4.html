@@ -1,0 +1,201 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 4: Backpropagation &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-3.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-5.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">4</p>
+      <hr class="chapter-rule">
+      <h1>Backpropagation</h1>
+    </div>
+    <p>One nice thing about the technique we used to figure out w1 and w2 for our turkey feather model is that, if you squint, you begin to see how we could use the same approach with more complicated models. A crucial part of the technique was calculating the partial derivatives of loss with respect to w1 and w2. We did it by writing out the equations and somewhat manually working out the derivatives.</p>
+    <p>Will this scale? When we create a model with a billion weights, which we’ll get to, we know we’ll do calculations with those billion weights to make predictions and compute loss. But how long will it take to then calculate the partial derivatives of loss with respect to each of those billion weights?</p>
+    <p>I don’t think the answer is obvious, but here’s an intuition. To calculate the partial derivative of w1, we treated w2 as a constant and did a whole bunch of calculations. If you count, the <em>whole bunch</em> was about the same number of calculations as it took to compute the loss in the first place. To calculate the partial derivative of w2, we treated w1 as a constant and did another whole bunch of calculations. So with a billion weights, you get the sense that calculating the partial derivative of each one could require a billion times as many calculations as it took to make the predictions and compute loss. This could be infeasible and remember, we’re talking about calculations that need to be repeated for every single step (e.g. the rows in <a href="chapter-3.html#tbl-3-11" class="xref" data-preview="images/RC020.png">table 3.11</a>) as we repeatedly adjust our weights.</p>
+    <p>Imagine I ask you to solve an intricate maze on a piece of paper. The maze has 100 entrances and a single finish, say a piece of cheese drawn in the middle. The final, optimal solution will be the same no matter where you start solving it from, but common sense will tell you to start from the center instead of arbitrarily picking one of the entrances.</p>
+    <p>There are many problems in computer science that work this way—approach them one way and the combinations get out of control, approach them backwards or by mixing forwards and backwards and they become tractable. As researchers in a variety of fields began to use computers to build and calculate models (e.g. economic models, early AI models) in the 1960s, they ran into the need to calculate many partial derivatives and recognized the efficiency of working backwards.</p>
+    <p>Amazingly, with <strong>backpropagation</strong>, the number of calculations to compute the partial derivatives of loss with respect to <em>all</em> of the weights will be about the same as to compute the loss itself. The key idea is that we can propagate the derivative of loss back through all of the original calculations rather than forward calculating the partial derivative of each weight. This will make more sense after I work through a few examples.</p>
+    <p>Forget about turkeys, feathers, and weights for a moment and go back to high school calculus. Let’s say you were asked to calculate the derivative of this function:</p>
+    <p class="centered">f(x) = (x<sup>2</sup>)<sup>3</sup></p>
+    <p>You probably would have said: f(x) = x<sup>6</sup> so the derivative of f(x) is 6x<sup>5</sup>. If x is 3, and we increase it a tiny bit, the output of the function will go up by 1458 times that tiny bit (talk about leverage!). As we did in <a href="chapter-3.html" class="xref">chapter 3</a>, let’s say our <em>tiny bit</em> is 0.01 and plug in real numbers:</p>
+    <div class="inset">
+      <p>f(3) = 729</p>
+      <p>f(3.01) should be around 729 + (1458)(.01) = 743.6</p>
+      <p>f(3.01) = (3.01)<sup>6</sup> = 743.7</p>
+    </div>
+    <p>Great. Now let’s think of this problem in a different way that at first will seem more convoluted. If you <strong>do not </strong>simplify f(x) = (x<sup>2</sup>)<sup>3</sup> to f(x) = x<sup>6</sup>, the way you would do the calculation in your head or on paper would be to first square the input and then take the result and cube it. This is also how a computer would calculate it.</p>
+    <figure id="fig-4-1">
+      <input type="checkbox" id="lb-24" class="lightbox-toggle">
+      <label for="lb-24"><img src="images/RC023.png" alt="" loading="lazy"></label>
+      <label for="lb-24" class="lightbox-overlay"><img src="images/RC023.png" alt=""></label>
+      <figcaption>Figure 4.1. Think of f(x) = (x<sup>2</sup>)<sup>3</sup> as a machine with two steps.</figcaption>
+    </figure>
+    <p>We now have a machine with two steps. (I’m using “step” here to mean something different from the steps in the <a href="chapter-3.html#tbl-3-11" class="xref" data-preview="images/RC020.png">table 3.11</a>.) Let’s plug in 3 as our input:</p>
+    <figure id="fig-4-2">
+      <input type="checkbox" id="lb-25" class="lightbox-toggle">
+      <label for="lb-25"><img src="images/RC024.png" alt="" loading="lazy"></label>
+      <label for="lb-25" class="lightbox-overlay"><img src="images/RC024.png" alt=""></label>
+      <figcaption>Figure 4.2. 3 goes into the machine, 729 comes out.</figcaption>
+    </figure>
+    <p>The number 3 goes into step A and 9 comes out, 9 goes into step B and 729 comes out. The output 729 is what we calculated a few paragraphs ago and you probably feel like I’m making a big deal out of nothing. Here’s where it gets interesting. Pretend A and B have dials off of which you can read numbers.</p>
+    <figure id="fig-4-3">
+      <input type="checkbox" id="lb-26" class="lightbox-toggle">
+      <label for="lb-26"><img src="images/RC373.png" alt="" loading="lazy"></label>
+      <label for="lb-26" class="lightbox-overlay"><img src="images/RC373.png" alt=""></label>
+      <figcaption>Figure 4.3. Pretend there are dials.</figcaption>
+    </figure>
+    <p>The dial on B is set to 9 automatically by B’s input. That’s just the way this machine works and we have no choice in the matter. But what if we <em>could</em> stick our finger on that red needle and increase it a tiny bit? By how much would the 729 increase? The derivative of x<sup>3</sup> is 3x<sup>2</sup>. You can take my word if you don’t remember the rule from calculus. Evaluate the derivative at the input to box B (9) and we have 3(9<sup>2</sup>) = 3(81) = 243. So if we turn B’s dial a tiny bit, the 729 will increase by 243 times that tiny bit.</p>
+    <p>Now let’s look at A and forget about B. The dial on A is set to 3. If we turn it up by a tiny amount, by how much will A’s output increase? The derivative of x<sup>2</sup> is 2x. Plug in 3 and we get 2(3) = 6.</p>
+    <p>If we turn the dial up on A a tiny amount, A’s output, which is the input to B, goes up by 6 times the tiny amount. Each little increase in B’s dial causes B’s output to go up by 243 times as we calculated above. So overall, a tiny increase in A causes the overall output of 729 to increase by 6 × 243 = 1458 times the tiny amount. This matches our calculation at the start of the chapter.</p>
+    <p>I’m now going to organize the calculation in a diagram. It may look a little strange at first. See if you can puzzle out why I arranged it this way.</p>
+    <figure id="fig-4-4">
+      <input type="checkbox" id="lb-27" class="lightbox-toggle">
+      <label for="lb-27"><img src="images/RC297.png" alt="" loading="lazy"></label>
+      <label for="lb-27" class="lightbox-overlay"><img src="images/RC297.png" alt=""></label>
+      <figcaption>Figure 4.4. Backward calculation.</figcaption>
+    </figure>
+    <p>In the <strong>forward calculation</strong>, the diagram where the arrows go to the right, we start with an initial input, do whatever calculations we want to do, and get a final output. In the <strong>backward calculation</strong>, we start on the right and work our way back to the initial input so we can see how changing the initial input will change the final output. In the forward calculation, we compute whatever final output the machine is supposed to compute. In the backward calculation we’re computing something different: the derivative of that final output with respect to the input.</p>
+    <p>Let’s look at the box “B backward.” It takes its input and multiplies it by 243. I italicized “input” to emphasize that I’m talking about the input from the arrow to the right, <em>not</em> the input to box B in the forward calculation. Think of “B backward” as saying—some other box to the right of me already figured out by how many times a tiny increase going into it in the forward calculation will the final output increase; I don’t need to know the details; I just know that whatever that number is, if I multiply it by 243, that will say by how many times a tiny increase coming into me in the forward calculation will increase the overall output.</p>
+    <p>Let me now say the same thing a little more elegantly using the term <em>derivative</em>. Some other box to the right of me already knows the derivative with respect to itself of the final output; I don’t need to know the details; I just know that if I multiply that number by 243, that will be the derivative of the final output with respect to me.</p>
+    <p>So why does the diagram show a 1 coming in from the far right? Because there is no box to the right of B. B is the last step in the machine. An increase of a tiny amount in the output is an increase of 1 times that tiny amount in the output. I know that sounds silly, but it explains why our starting number for the backward calculation is always 1. Or think about it this way—imagine the final output is itself a box with a dial from which we read the output. As with other steps, we want to ask this question: If we force the dial to increase by a tiny amount, how much does the final output increase? The dial <em>is</em> the final output, so the increase will be 1 times the tiny amount.</p>
+    <p>Let me show the forward and backward calculations on a single diagram:</p>
+    <figure id="fig-4-5">
+      <input type="checkbox" id="lb-28" class="lightbox-toggle">
+      <label for="lb-28"><img src="images/RC299.png" alt="" loading="lazy"></label>
+      <label for="lb-28" class="lightbox-overlay"><img src="images/RC299.png" alt=""></label>
+      <figcaption>Figure 4.5. Forward and backward calculations for f(x) = (x<sup>2</sup>)<sup>3</sup>.</figcaption>
+    </figure>
+    <p>The exact details are less important than the idea that we can come up with model and loss calculations that involve a huge number of weights and all sorts of operations—multiplying, adding, raising to a power, taking a logarithm, replacing negative numbers with zero, clipping numbers, and there will still be an efficient (and organized!) way to find the partial derivatives with respect to the weights.</p>
+    <p>You might be objecting at this point. Why do the calculation backwards? Why not start with 1 on the left, multiply by six, multiply by 243, and we’ll still get 1458. Isn’t that less convoluted and doesn’t it involve the same number of calculations? Yes. But that’s only because in this example we’re calculating a single derivative. To give you this intuition, let’s say I asked you to multiply two sets of numbers:</p>
+    <div class="inset">
+      <p>a) 32 × 93 × 38</p>
+      <p>b) 14 × 93 × 38</p>
+    </div>
+    <p>Since we’re talking multiplication, order doesn’t matter. If you multiply from left to right, you’ll need to do two multiplications for each of a) and b) for a total of four multiplications. If you start on the right, you can reuse 38 × 93 from a) for b). This will be a total of three multiplications. When we’re calculating billions of partial derivatives of a single loss number we end up in a similar situation. The multiplications “closer to” the single loss number are repeated over and over for each partial derivative and we can avoid repeating them by working backward.</p>
+    <p>If some of this is sounding familiar, especially the part above <a href="#fig-4-4" class="xref" data-preview="images/RC297.png">figure 4.4</a> where I explained the intuition for why we multiply 243 by 6, here’s why. In high school you may have learned about the <strong>chain rule</strong> to compute the derivative for functions that are chained together. It was likely explained like this: If you have a function f(g(x)), then the derivative of f with respect to x is the derivative of f with respect to its input evaluated at g(x) times the derivative of g with respect to x. If f(x) is x<sup>3</sup> and g(x) is x<sup>2</sup> then this is exactly the example we’ve been working through. The derivative of f with respect to x according to the chain rule will be 3(g(x)<sup>2</sup>)(2x) = 3((x<sup>2</sup>)<sup>2</sup>)(2x) = (3)(x<sup>4</sup>)(2x) = 6x<sup>5</sup>. Plug in 3 for x and you get 1458, just like above.</p>
+    <hr class="section-break">
+    <p>Let’s do the forward and backward calculations for our turkey example in diagram form. Our goal will be to calculate loss in the forward calculation, and then calculate the partial derivatives of loss with respect to w1 and w2 in the backward calculation. There will be a lot of boxes and numbers. Don’t worry. Soon we’ll get to a cleaner way to organize the information and calculations.</p>
+    <p>For convenience, here’s the table with table with our turkey data (same as <a href="chapter-3.html#tbl-3-1" class="xref" data-preview="images/RC009.png">table 3.1</a>):</p>
+    <figure id="tbl-4-1" style="max-width:70%">
+      <input type="checkbox" id="lb-29" class="lightbox-toggle">
+      <label for="lb-29"><img src="images/RC009.png" alt="" loading="lazy"></label>
+      <label for="lb-29" class="lightbox-overlay"><img src="images/RC009.png" alt=""></label>
+      <figcaption>Table 4.1. Our turkey data.</figcaption>
+    </figure>
+    <p>First let’s draw all the boxes for the forward calculation.</p>
+    <figure id="fig-4-6">
+      <input type="checkbox" id="lb-30" class="lightbox-toggle">
+      <label for="lb-30"><img src="images/RC026.png" alt="" loading="lazy"></label>
+      <label for="lb-30" class="lightbox-overlay"><img src="images/RC026.png" alt=""></label>
+      <figcaption>Figure 4.6. The forward calculation of loss.</figcaption>
+    </figure>
+    <p>There are a lot of boxes and arrows but mostly because we have to repeat everything for each of our three turkeys. Look at turkey #1. We take weight 1 (w1) and multiply it by the height of the turkey (1 meter), we take weight 2 (w2) and multiply it by the length of the turkey (1.5 meters), we add those two numbers together (that’s our prediction for number of feathers), we subtract 5000 (the actual number of feathers), that’s our error. Then we square the error, repeat for turkey #2 and turkey #3, and then add the three squared errors together. That’s our loss.</p>
+    <p>You might wonder why inside the boxes I refer to the input as “input” instead of the much shorter “x” as in <a href="#fig-4-1" class="xref" data-preview="images/RC023.png">figure 4.1</a>. I could have used “x,” but “x” typically means data in AI (e.g. data about turkeys) and once you get used to that convention in future chapters, I don’t want you to come back to this diagram and wonder if I mean “x” the input to the box or “x” some data.</p>
+    <p>Here’s the forward calculation for w1=1000 and w2=3000, the same starting weights we used in <a href="chapter-3.html" class="xref">chapter 3</a>.</p>
+    <figure id="fig-4-7">
+      <input type="checkbox" id="lb-31" class="lightbox-toggle">
+      <label for="lb-31"><img src="images/RC027.png" alt="" loading="lazy"></label>
+      <label for="lb-31" class="lightbox-overlay"><img src="images/RC027.png" alt=""></label>
+      <figcaption>Figure 4.7. Calculating the loss when w1 is 1000 and w2 is 3000.</figcaption>
+    </figure>
+    <p>The loss, 1,312,500, is the same as we computed in <a href="chapter-3.html" class="xref">chapter 3</a> (see <a href="chapter-3.html#tbl-3-3" class="xref" data-preview="images/RC011.png">table 3.3</a>).</p>
+    <p>Now the fun and confusing part: the backward calculation. It took me a long time to work out the diagram. You may want to try on your own first. Even though I haven’t yet explained all of the rules of the road, trying will force you to think about what calculations must happen.</p>
+    <p>Let’s set up the calculation first, understand it, then we’ll plug 1 in on the right and see what we get. As in <a href="#fig-4-4" class="xref" data-preview="images/RC297.png">figure 4.4</a>, I italicized “input” to remind you and me that the input into each box is from the right, as shown by the arrows. (This gets confusing because, as you know from <a href="#fig-4-5" class="xref" data-preview="images/RC299.png">figure 4.5</a>, the backward calculation in boxes also depends on the input they got from the left during the forward calculation.)</p>
+    <figure id="fig-4-8">
+      <input type="checkbox" id="lb-32" class="lightbox-toggle">
+      <label for="lb-32"><img src="images/RC028.png" alt="" loading="lazy"></label>
+      <label for="lb-32" class="lightbox-overlay"><img src="images/RC028.png" alt=""></label>
+      <figcaption>Figure 4.8. The backward calculation to compute the partial derivatives of loss with respect to w1 and w2.</figcaption>
+    </figure>
+    <p>As a reminder, our goal in this whole calculation is to figure out if we increase w1 by a tiny amount, by what multiple of that tiny amount will the loss change. And the same question for w2.</p>
+    <p>I want to explain how I came up with a few of the boxes. It might again be helpful to think about this yourself before reading my explanations.</p>
+    <ul>
+      <li>Box A - we take the <em>input</em> (from the right), multiply it by 1, and send it down the first arrow. We do the same with the second and third arrows. The reason this makes sense is that in the <strong>forward</strong> pass this box calculated “input 1 + input 2 + input 3.” The partial derivative of input 1 is 1 and same for inputs 2 and 3. Since each box multiplies by its derivative(s) to go backwards, we multiply <em>input</em> × 1 for each arrow. Or for the intuition, look at the top arrow bringing 250,000 into the box in the forward calculation shown in <a href="#fig-4-7" class="xref" data-preview="images/RC027.png">figure 4.7</a>. If that 250,000 goes up by a small amount, the output of the box will go up by one times that small amount, and this would be true even if that 250,000 was a different number, because all the box does in the forward calculation is add its three inputs.</li>
+      <li>Box B - during the <strong>forward</strong> pass this box did the calculation input<sup>2</sup>. The derivative of f(input) = input<sup>2</sup> is 2 × input. The input during the forward pass was 500 so the value of the derivative is 2 × 500 = 1000. We multiply as we go backwards, so the backward calculation in the box is to multiply the <em>input</em> from the right by 1000.</li>
+      <li>Box C - during the <strong>forward</strong> pass the box did the calculation input - 5000. The derivative of f(input) = input - 5000 is 1. The input to the box during the forward pass was 5500. However, just as with box A, this doesn’t matter. The derivative will be 1 regardless and so we multiply the <em>input</em> from the right by 1.</li>
+      <li>Box D - during the <strong>forward</strong> pass the box did the calculation input × 1.5. The derivative of f(input) = (1.5)(input) is 1.5. The input to the box during the forward pass was 3000, but this is another instance where this doesn’t matter. The derivative is 1.5 so we multiply the <em>input</em> from the right by 1.5.</li>
+    </ul>
+    <p>I didn’t explain what happens when multiple arrows come into a single box like w1. The rule is we add. To see the intuition, think about a small increase in w1. This will cause the loss to increase by a certain amount according to the first arrow coming into the box, by a certain amount according to the second arrow, and a certain amount according to the third. The total increase will therefore be the small increase in w1 times the sum of the amounts indicated by each arrow.</p>
+    <p>Now let’s plug 1 in on the far right and see what we get:</p>
+    <figure id="fig-4-9">
+      <input type="checkbox" id="lb-33" class="lightbox-toggle">
+      <label for="lb-33"><img src="images/RC029.png" alt="" loading="lazy"></label>
+      <label for="lb-33" class="lightbox-overlay"><img src="images/RC029.png" alt=""></label>
+      <figcaption>Figure 4.9. Backward calculation.</figcaption>
+    </figure>
+    <p>Look! The partial derivatives of loss with respect to w1 and w2 come out to 1875 and 3500, exactly as we calculated and showed in <a href="chapter-3.html#tbl-3-7" class="xref" data-preview="images/RC016.png">table 3.7</a> in <a href="chapter-3.html" class="xref">chapter 3</a>. Increase w1 a tiny bit, and the loss will increase by 1875 times that tiny bit. Increase w2 a tiny bit, and the loss will go up by 1500 times that tiny bit due to turkey #1, 2500 times that tiny bit due to turkey #2, and down by 500 times that tiny bit due to turkey #3, so in total 3500 times that tiny bit.</p>
+    <p>As a sort of sanity check, look at the number 1000 that I labeled F. You might be thinking that the number feels large. If I could force the (forward pass) output of box E to go up by a little bit, could that really cause an increase of 1000 times that little bit in the loss? Yes! Because in the forward pass, the output of E is 500 and, also in the forward pass, G takes that and squares it. The number 500 squared is 250,000. The number 501 squared is 251,001. The difference is around 1000. And since that’s added into the loss, it means the loss will go up by around 1000.</p>
+    <p>You’ve now seen a slightly more realistic example of backpropagation. We did a forward pass to calculate loss. And then in the backward pass we <em>propagated</em> the derivative (soon we’ll call this a gradient) <em>back</em> through the calculation to the weights.</p>
+    <p>You may also have heard of <strong>training</strong> a model. We’ve now seen the full idea of how a training loop works. Start with some weights. Do a forward calculation to compute loss. Do a backward calculation to get the partial derivatives of the loss for each weight. Update the weights a little. And repeat. It’s what we did with our two weights and three turkeys, and it’s also what’s used to train the models underlying ChatGPT with trillions of weights and tens of trillions of “turkeys.” Later I’ll get into what the “turkeys” are for these models.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-3.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-5.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

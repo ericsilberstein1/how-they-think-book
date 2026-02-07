@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 9: Generating text &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-8.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-10.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">9</p>
+      <hr class="chapter-rule">
+      <h1>Generating text</h1>
+    </div>
+    <p>Now for the fun part: generating text. Let me bring in <a href="chapter-8.html#fig-8-3" class="xref" data-preview="images/RC066.png">figure 8.3</a> again:</p>
+    <figure id="fig-9-1" style="max-width:90%">
+      <input type="checkbox" id="lb-94" class="lightbox-toggle">
+      <label for="lb-94"><img src="images/RC066.png" alt="" loading="lazy"></label>
+      <label for="lb-94" class="lightbox-overlay"><img src="images/RC066.png" alt=""></label>
+      <figcaption>Figure 9.1. Next token prediction for the input “&lt;bos&gt; he.”</figcaption>
+    </figure>
+    <p>When I showed this diagram in <a href="chapter-8.html" class="xref">chapter 8</a>, the purpose was to compare the model output against the expected next word “went” as part of calculating our loss. Generation starts exactly the same but we <strong>do not</strong> want to calculate loss, backpropagate, or update weights. Instead, we use the probability distribution to pick our next word, and then we add that word to the sequence and feed it in again. Let’s do this, keeping in mind that the example output in figures <a href="#fig-9-1" class="xref" data-preview="images/RC066.png">9.1</a> and <a href="#fig-9-2" class="xref" data-preview="images/RC080.png">9.2</a> below is before training, so we should only expect nonsense at this point. Let’s mechanically go through the steps.</p>
+    <p>The token with the top probability is “he.” We’ll pick that. Now our sequence is “&lt;bos&gt; he he.” Feed that in:</p>
+    <figure id="fig-9-2">
+      <input type="checkbox" id="lb-95" class="lightbox-toggle">
+      <label for="lb-95"><img src="images/RC080.png" alt="" loading="lazy"></label>
+      <label for="lb-95" class="lightbox-overlay"><img src="images/RC080.png" alt=""></label>
+      <figcaption>Figure 9.2. Next token prediction for the input “&lt;bos&gt; he he.”</figcaption>
+    </figure>
+    <p>The token with the top probability is “bed.” Now our sequence is “&lt;bos&gt; he he bed.” That’s nonsense but you get the idea. You’ll also see that it works the same if we start with an “empty” prompt (just &lt;bos&gt;), a prompt like we used above “&lt;bos&gt; he,” or a longer prompt like “&lt;bos&gt; The man is.”</p>
+    <p>Just now when I chose my next tokens, I chose the ones with the top probability. If I solely do things this way, then a given prompt will always result in the exact same generated text. You’ll know from using ChatGPT that’s not how these models work. They often generate something slightly or even substantially different given the same prompt. This is desired so that the model can be creative. Just like humans, we don’t want it to be too rigid in its thinking. Perhaps choosing a slightly less likely next token early on in a long generation will send it down a very different and fruitful path.</p>
+    <p>Lucky for us the model doesn’t just output its prediction for the most likely next token. It outputs an entire probability distribution. So instead of necessarily picking the choice with the highest probability, we can pick randomly according to the probability. What I mean by that is, using the output above as an example, if I picked 100 times, about 24 times I would pick “bed,” around 15 times I would pick “man,” and so on. So while picking “the” is unlikely, it could happen.</p>
+    <p>You can imagine wanting to tweak this based on your purpose. If the prompt is essentially posing a factual question to which you expect a short and correct completion, e.g. “The capital of France is” you want it to say “Paris” every time. If the prompt is “Paris is in,” you might want to see a variety of completions like “France,” “Europe,” or “the north-central part of France,” but you don’t want it to choose “New” and then “York.” On the other hand, if you start with “A good plot for a sci-fi novel is” and don’t let it be creative enough, it’s going to always come back with the same average idea.</p>
+    <p>There are lots of ways to tweak this. One is setting a <strong>temperature</strong> value. At a low temperature, the probability distribution gets focused on the most likely tokens making picking a low-probability token less likely. A high temperature does the opposite. You can remember which way it goes by thinking about molecules—at lower temperatures molecules move around with less randomness. To give a bit of a sneak peek, in <a href="chapter-28.html" class="xref">chapter 28</a>, when we get to reinforcement learning, we’ll use a medium temperature to generate multiple solutions to the same word problems, judge if each is correct or not, and feed them into the model as training data.</p>
+    <p>Now you know how to generate text. I hope you see that I wasn’t lying or even exaggerating in <a href="chapter-2.html" class="xref">chapter 2</a> when I said that judging the probability of some text being right and generating new text are two sides of the same coin. Of course there are more details. Once we’ve explored the inside of the model, we’ll get into optimizations for generating next tokens without having to feed the entire growing sequence every time (coming up in <a href="chapter-17.html" class="xref">chapter 17</a>). We’ll also get into how special tokens come into play—for example to indicate the end of a sequence or that the model would like to use an external tool.</p>
+    <p>There’s one more thing I want to show before we end this chapter. I hope you find it annoying, or at least unsatisfying, that I gave an example of an untrained model spitting out nonsense. You want to see the magic of generation of sensical text. To do this, I’m going to use the 20-layer model I trained earlier. We’re now back to the vocab size of 65,536 so I can’t show the probability distribution over all possible tokens. Instead I’ll show the top 5 and the bottom 5.</p>
+    <p>Here are the top and bottom five for the prompt “The capital of France is.” To make this a little fun for me while writing and you while reading, I’ll list the token IDs first so we can guess and then look them up. I promise not to cheat. You may want to pause here and guess yourself.</p>
+    <figure id="tbl-9-1" style="max-width:70%">
+      <input type="checkbox" id="lb-96" class="lightbox-toggle">
+      <label for="lb-96"><img src="images/RC081.png" alt="" loading="lazy"></label>
+      <label for="lb-96" class="lightbox-overlay"><img src="images/RC081.png" alt=""></label>
+      <figcaption>Table 9.1. Five most and least likely next tokens for the prompt “The capital of France is.”</figcaption>
+    </figure>
+    <p>The model really wants to complete the prompt with token 6237. I hope that’s “ Paris.” I’m guessing 261 is “ a” as in “ a city…” The ID 32 falls in the old ASCII range of UTF-8 (see <a href="chapter-7.html" class="xref">chapter 7</a>) and I’m guessing it’s a space, plus somewhere in the back of my head I probably know that. I’m not sure what 543 and 51481 are. Could 51481 be “ paris” (lowercase P)? 543 must be a common word or a common part of a word—”very”? Let’s check:</p>
+    <figure id="tbl-9-2">
+      <input type="checkbox" id="lb-97" class="lightbox-toggle">
+      <label for="lb-97"><img src="images/RC082.png" alt="" loading="lazy"></label>
+      <label for="lb-97" class="lightbox-overlay"><img src="images/RC082.png" alt=""></label>
+      <figcaption>Table 9.2. The tokens revealed!</figcaption>
+    </figure>
+    <p>Great! 6237 is “ Paris” as hoped. If we select the next token according to the probability distribution without adjusting temperature or making any other tweaks, then 98 times out of 100 we’ll choose “Paris.” In retrospect, “ the” does seem more likely than “ a.” And “ also” for 543 makes more sense than my guess of “very.” I’m surprised by the double space. Notice that the top five add up to just over 99%. This leaves only 1% of the probability to spread across all the other 65,531 tokens.</p>
+    <p>Let’s explore what happens if we choose “the” and “also” as our next tokens. To make it easier to see the various directions it can go I’ll use a diagram instead of a table.</p>
+    <figure id="fig-9-3">
+      <input type="checkbox" id="lb-98" class="lightbox-toggle">
+      <label for="lb-98"><img src="images/RC083.png" alt="" loading="lazy"></label>
+      <label for="lb-98" class="lightbox-overlay"><img src="images/RC083.png" alt=""></label>
+      <figcaption>Figure 9.3. Predictions for the tokens after “the” and “also.”</figcaption>
+    </figure>
+    <p>Notice how the probability is very concentrated when there is an overwhelming single choice, like “Paris” after “The capital of France is,” but can be roughly evenly spread out over a few choices such as after “The capital of France is also.” The model really wants to get “Paris” in there, you can almost feel this urge it needs to satisfy to output “Paris” even in places it doesn’t quite fit, like “The capital of France is the Paris” and “The capital of France is also Paris.”</p>
+    <p>The completion “country” for “The capital of France is also the” may seem odd, especially with 21% probability. Remember though that the tokenizer breaks up text with apostrophes, so I bet most of the probability for the token after “country” will go to “‘s”. Let’s check:</p>
+    <figure id="tbl-9-3" style="max-width:60%">
+      <input type="checkbox" id="lb-99" class="lightbox-toggle">
+      <label for="lb-99"><img src="images/RC084.png" alt="" loading="lazy"></label>
+      <label for="lb-99" class="lightbox-overlay"><img src="images/RC084.png" alt=""></label>
+      <figcaption>Table 9.3. Top five next token predictions for after “country.”</figcaption>
+    </figure>
+    <p>Yes. And choice 5 is the same thing with a curly apostrophe.</p>
+    <p>Let’s do one more example that I brought up earlier in this chapter: “Paris is in.” I’m guessing “France” will be the top choice and “Europe” will be the next and I’m expecting to see the probability a bit more evenly distributed.</p>
+    <figure id="tbl-9-4" style="max-width:60%">
+      <input type="checkbox" id="lb-100" class="lightbox-toggle">
+      <label for="lb-100"><img src="images/RC085.png" alt="" loading="lazy"></label>
+      <label for="lb-100" class="lightbox-overlay"><img src="images/RC085.png" alt=""></label>
+      <figcaption>Table 9.4. Top five next token predictions for after “Paris is in.”</figcaption>
+    </figure>
+    <p>I was right about the probability being more spread out and wrong about France being the top choice.</p>
+    <p>One last detail just in case the following is bothering you. As we worked through the inputs and outputs for training in <a href="chapter-8.html" class="xref">chapter 8</a>, I showed that we input a tensor of size B×T into the model and it outputs a tensor of size B×T×V. In other words, we get back a next token prediction (probability distribution) for every input token as shown in <a href="chapter-8.html#fig-8-6" class="xref" data-preview="images/RC070.png">figure 8.6</a>.</p>
+    <p>In my generation examples in this chapter, however, I only showed a prediction for the whole sequence. Where did other sequences in the batch go? Where did the predictions for the earlier tokens in the sequence go? They are there. I just assumed my batch size was 1 and I was only interested in the predictions for the final tokens. The output really is a tensor of size B×T×V. If tensor indexing notation will help you (see <a href="chapter-8.html#fig-8-8" class="xref" data-preview="images/RC072.png">figure 8.8</a>), I looked only at output[0,-1,:] meaning the first batch, the last token, all probabilities. (Perhaps you’re now thinking: wow, what a waste, during generation, to predict all these tokens that we’re going to ignore. You’re right and later, when we talk about the KV cache in <a href="chapter-17.html" class="xref">chapter 17</a>, you’ll see an optimization.)</p>
+    <p>Now you know how training and generation works. It’s time to look inside the model.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-8.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-10.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

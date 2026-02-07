@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 1: Introduction &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <span></span>
+    <a href="index.html">Contents</a>
+    <a href="chapter-2.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">1</p>
+      <hr class="chapter-rule">
+      <h1>Introduction</h1>
+    </div>
+    <p>Before I get into how they think, let me say something about how I think. This will help you decide whether this book is for you. I like to understand details. I like to make small examples of things and work through them with real numbers. I don’t do well with big abstract ideas until I can first get my head around a specific example. I’m pretty good at reading English and code. I’m not especially good at reading math.</p>
+    <p>I used to think needing examples was a crutch and other people understood ideas directly from abstract symbols. Maybe they do. But twenty years ago or so I read <em>Surely You&#x27;re Joking, Mr. Feynman! </em>He wrote:</p>
+    <blockquote>
+      <p>I had a scheme, which I still use today when somebody is explaining something that I’m trying to understand: I keep making up examples. For instance, the mathematicians would come in with a terrific theorem, and they’re all excited. As they’re telling me the conditions of the theorem, I construct something which fits all the conditions. You know, you have a set (one ball)—disjoint (two balls). Then the balls turn colors, grow hairs, or whatever, in my head as they put more conditions on. Finally they state the theorem, which is some dumb thing about the ball which isn’t true for my hairy green ball thing, so I say, “False!”</p>
+    </blockquote>
+    <p>Feynman won the Nobel Prize in physics so I don’t think I or anyone else needs to feel too bad about using examples.</p>
+    <p>There’s the famous Arthur C. Clarke quote about any sufficiently advanced technology seeming like magic. Computers never felt like magic. My dad brought home a computer when I was in second grade. It was an Atari 400 that hooked up to our TV. I learned to program by copying code out of the BASIC manual that came with the BASIC cartridge. So as amazing as modern phones and cloud services are, they aren’t a mystery. I’ve always felt, probably wrongly, that if required, I could chase the operations of any piece of software all the way down to the tiny pieces of logic that in turn get translated into even tinier pieces of logic and executed by the circuits on chips.</p>
+    <p>Then, completely defying my intuition for what computers were capable of, they could think. They could translate from English to German. They could make sense of scientific articles intended only for human consumption, and generate creative stories, and draw an astronaut riding a horse on the moon based on you asking it to draw an astronaut riding a horse on the moon. An alien intelligence landed on our planet, but we invented it. It was magic. Except I knew it was actually 1s and 0s and logic under the hood. I had one screaming question: HOW DOES IT WORK?</p>
+    <p>I’ve been trying to answer that question in fits and starts since 2017. I never got as far as I wanted due to being busy and getting stuck. I found that the tools in my old toolbox such as imagining logic and tracing code, or vice versa, were only so helpful with AI. The reasons for this will become apparent as you read.</p>
+    <p>In October 2025 the stars aligned. I had time on my hands just when AI researcher Andrej Karpathy released Nanochat, which he described as “the best ChatGPT that $100 can buy.” His promise was that you could train a chat model from scratch for $100 of rented GPU time. Or, for $1000, you could train an even smarter model, but you wouldn’t need to spend millions or hundreds of millions of dollars.</p>
+    <p>More important was the question of good taste. Karpathy knows everyone in AI. He knows the latest research, and he probably knows through osmosis or intuition things he shouldn’t know about how OpenAI, Anthropic, and Google build their models. There are a million decisions at every step of building and training a chat model. I knew he would have chosen wisely, and that since he coded everything from scratch in the months before release, his choices would reflect current best practices.</p>
+    <p>This book is not only about Nanochat, but Nanochat will be my reference for what’s inside a modern chat model and how they get trained. I want to take you on the fascinating journey I’ve been on to finally satisfy my curiosity about how ChatGPT (and Claude, Gemini, DeepSeek, etc.) think. One advantage of drawing all of my examples from Nanochat is it keeps them coherent. (Also, if you get interested enough, you also can download it yourself.)</p>
+    <p>I intend this book for people who want to go on a journey and understand the details along the way. If you see a big picture diagram and get something out of it and have no desire to know—yeah, but what actually goes in and out of that box—this book is not for you. I imagine that you enjoyed math in high school, you might vaguely remember a few concepts from calculus, and you may have had some exposure to programming. I’ll explain everything from that starting point. For example, how to solve 3x = 6 is locked in your brain, but you may not remember what a derivative is.</p>
+    <p>If you live and breathe math this book is <strong>not</strong> for you. You’ll get frustrated when I take three paragraphs to explain something that could be expressed with a few math symbols. You’ll be upset when I show a calculation with actual numbers when, to you, it’s simpler and clearer to use variables.</p>
+    <p>On the other hand, if you skim ahead and see intricate diagrams, matrix math, a mess of calculations, terms like “ReLU,” and weird clock-like plots you might figure this text is too complicated for you. <strong>It’s not</strong>. You have to want to know the details, but I go step by step. I assume you think logically and get that computers are good at following instructions. But you don’t need to know any of the many, many concepts in artificial intelligence: not ideas invented in the 1940s like neural networks and not the ‘T’ in GPT—the transformer—invented by researchers at Google in 2017.</p>
+    <p>I include a lot of my own intuition for why certain things are certain ways. I’m not claiming that my intuition is the best or even always correct. But I’ve been fascinated by languages and computers my whole life, I studied computer science, and I ran a data science team where I learned from brilliant mathy professional model builders. So I think my intuition is worth something. And intuition is essential to understanding how ChatGPT thinks. We humans can’t directly picture the calculations and learning going on inside AI involving billions or trillions of weights. We need to imagine.</p>
+    <p>Now about coming on the adventure with me. As you’ll learn in this book, GPT models have layers. Generally speaking, more layers means smarter and more expensive to train. Purely to satisfy my curiosity, before I ever thought of writing this book, I manually (no copying and pasting) re-implemented Karpathy’s Nanochat and trained a 20-layer version of the model. I’ll use this 20-layer version as my main reference to explain the architecture. Then, together, we’ll train a bigger, smarter, 32-layer model. You’ll be on the journey with me. I won’t cheat. I’ll share what I’m doing, how much it costs, how the model performs against a battery of tests, and together we’ll have the first interactive chat ever with our new model. A conversation that will start like this:</p>
+    <div class="conversation">
+      <p class="msg-user">hello</p>
+      <p class="msg-ai">Hello! I am nanochat, a Large Language Model.</p>
+    </div>
+    <p>I organized this book around the journey. First we’ll get to a point where we can train the model, then we’ll train it, and then we’ll chat with it. Here’s the structure:</p>
+    <ul>
+      <li>Chapters <a href="chapter-2.html" class="xref">2</a>–<a href="chapter-5.html" class="xref">5</a>  – What are AI models? How do you train them?</li>
+      <li>Chapters <a href="chapter-6.html" class="xref">6</a>–<a href="chapter-9.html" class="xref">9</a>  – What does a GPT model do?</li>
+      <li>Chapters <a href="chapter-10.html" class="xref">10</a>–<a href="chapter-17.html" class="xref">17</a>  – What’s inside a GPT model?</li>
+      <li><a href="chapter-18.html" class="xref">Chapter 18</a>  – Once trained, how will we know if our model is working?</li>
+      <li>Chapters <a href="chapter-19.html" class="xref">19</a>–<a href="chapter-23.html" class="xref">23</a>  – How do we train a GPT model with billions of parameters?</li>
+      <li>Chapters <a href="chapter-24.html" class="xref">24</a>–<a href="chapter-28.html" class="xref">28</a>  – Perform four phases of training and evaluation: base, mid, supervised fine-tuning, reinforcement learning.</li>
+      <li><a href="chapter-29.html" class="xref">Chapter 29</a>  – Say hello to our model for the first time ever!</li>
+      <li><a href="chapter-30.html" class="xref">Chapter 30</a>  – Extra chapter on floating point precision</li>
+    </ul>
+    <p>Feel free to skip chapters <a href="chapter-3.html" class="xref">3</a>–<a href="chapter-5.html" class="xref">5</a> if you’re already familiar with how to build and train models using gradient descent, backpropagation, and matrices. If you know about models with multiple layers and nonlinear activation functions, skip <a href="chapter-10.html" class="xref">chapter 10</a>, although you may want to skim the model diagrams and plots. If you’re comfortable with transformers and just want to know how I trained mine and refined it into a chat model, read <a href="chapter-18.html" class="xref">chapter 18</a> and then chapters <a href="chapter-23.html" class="xref">23</a>–<a href="chapter-29.html" class="xref">29</a>.</p>
+    <p>It’s early February 2026 and I’m getting comfortable enough with my draft to post it on github. In what feels like just the last few days, OpenAI released a platform for enterprises to manage AI agents and a new agentic coding model: GPT-5.3-Codex. Anthropic released their new model Opus 4.6 and a preview of Cowork. Anthropic and Cursor conducted proofs of concept in which thousands of agents collaboratively coded two complex pieces of software: a compiler and a browser. Clawd became MoltBot became OpenClaw and agents created 300,000 posts and 11 million comments on MoltBook, the Reddit for agents.</p>
+    <p>We humans in certain fields, especially in knowledge work, are under enormous pressure to adapt and meanwhile it’s getting harder and harder to keep up with the latest developments. Is it worth learning the fundamentals of how the models work? I think yes. When you understand how large language models make predictions, get trained, get evaluated, and use tools it becomes easier to follow and anticipate the big picture.</p>
+    <p>One last thing I want to address is my working title for this book, <em>How They Think</em>. I’m not trying to wade into the philosophical argument of what does and doesn’t constitute thinking or claim that large language models and human brains are equivalent. I’m only reflecting that if we went back a decade, given what I knew computers to be capable of, the things they can now do would absolutely have appeared to be the product of human thought, hence the shock I expressed above. Once you finish reading and know the mechanics of a GPT model you can decide for yourself what label best fits their calculations, and of course you may prefer to reserve “thinking” for the calculations of our human brains.</p>
+  </article>
+  <nav class="chapter-nav">
+    <span></span>
+    <a href="index.html">Contents</a>
+    <a href="chapter-2.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

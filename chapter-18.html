@@ -1,0 +1,243 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 18: CORE: How will we know if our model works? &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-17.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-19.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">18</p>
+      <hr class="chapter-rule">
+      <h1>CORE: How will we know if our model works?</h1>
+    </div>
+    <p>So we have this structure with embeddings and rotary embeddings and self attention. It’s beautiful and elegant and in the grand scheme of things, for what it’s supposed to do, ridiculously simple. We can access enough digital data and enough computing power to train the thing in hours to weeks or longer, but we don’t need years or multiple human lives. But does it actually do anything useful?</p>
+    <p>One big question is does validation loss come down. See <a href="chapter-10.html" class="xref">chapter 10</a> for a reminder of what this is. For a model with a simpler purpose, say predicting the number of feathers on a turkey, that’s just about all we need. For whatever purpose we need to predict number of feathers—say you breed turkeys to produce 18th-century style quill pens and need to estimate yield—you can decide on an average error that’s acceptable to you. Once validation loss shows you’re there you can deem your model useful and move onto something else.</p>
+    <p>For a model that labels or categorizes things it’s only natural to reach beyond loss and ask the common sense and more straightforward question of how accurate it is. I feed in 100,000 images for which I know the correct labels and which I made sure to keep out of the training data. How many does the model label correctly? You saw this in the ImageNet competition in <a href="chapter-12.html" class="xref">chapter 12</a>.</p>
+    <p>So how many images does the model label correctly? Half? That’s much, much better than random guessing. Is it useful for my purposes? I can dig in by looking at images that it gets wrong or by looking at accuracy by category. I could decide that for my purposes it only matters that I get the general category right (say “cat”) and I don’t care about the detailed category (“Burmese cat”). My point is that for models with a clear purpose, common sense will guide you to an appropriate way of evaluating them.</p>
+    <p>Now we come to our GPT model. This is a model that has the potential to think and therefore to be useful in the way that our brains are useful or maybe how a computer is useful—a “bicycle of the mind” is the famous Steve Jobs quote. It’s a text-in and text-out machine (and these days images, audio, and video too). It could be useful for all sorts of things including purposes we haven’t even imagined yet. So where to start?</p>
+    <p>The field of using computers to make sense of human language is known as <strong>natural language processing</strong> or NLP. <em>Natural</em> here refers to a language like English or Chinese in contrast with a constructed language like C++ or Python. There are a whole bunch of classic NLP problems and batteries of benchmarks to judge how well a system can solve these problems. Examples are sentiment analysis (is this customer review of a restaurant positive or negative?), machine translation (discussed in <a href="chapter-6.html" class="xref">chapter 6</a>), spam detection, spelling/grammar correction (discussed in <a href="chapter-2.html" class="xref">chapter 2</a>), and information extraction (pull out the names of the main people and places from this news article). These problems are analogous to the classic computer vision problems like identifying objects in a photo (discussed in <a href="chapter-12.html" class="xref">chapter 12</a>) and drawing bounding boxes around objects in images.</p>
+    <p>As an aside, we’ve become so quickly so used to computers understanding human language that we forget just how challenging these classic NLP problems used to be. Here’s an example of a Yelp review of a restaurant I like in my town. This type of data was great for building sentiment analysis systems because there’s lots of it out there and it comes with a label—the star rating.</p>
+    <div class="inset">
+      <p>I love authentic Vietnamese food and unfortunately this place does not serve that in my opinion. My friends and I ordered bowls of Pho and waited about 45 minutes for a table to open up. Perhaps our expectations were high given the long line at the enterance [sic] but we were disappointed not with the ginormous portions (which could feed a village) but we got a bowl of 90% noodles and a little bit of mediocre and somewhat flavorless broth. The staff are very nice and the place is organized, but when I am craving pho this place just doesn&#x27;t hit the spot.</p>
+    </div>
+    <p>To a human and a modern model it’s obvious that this is a negative review. However, how would you write an algorithm the “old” way to figure this out? There are many words with a positive sentiment: love, authentic, high, ginormous, “very nice,” craving, “hit the spot.” There are also negative-sentiment words: unfortunately, disappointed, mediocre, flavorless. To us, it’s also obvious that some of the positive words are negated. Predicting the star rating, or even just positive or negative sentiment, from text was not an easy problem until recently. (What do you think this reviewer gave the restaurant? Two stars.)</p>
+    <p>You can imagine researchers initially evaluated GPT models according to these classic NLP problem benchmarks. The labeled data was available, there were prior results to compare to, and it was just a matter of finding clever ways to structure GPT model input and output to get a prediction of sentiment, or key information, or whatever was needed. This was the early days of what later became <strong>prompt engineering</strong>. For example, a sentiment analysis prompt could be:</p>
+    <div class="inset">
+      <p>Classify the text into neutral, negative, or positive</p>
+      <p>Text: [fill in the text here]</p>
+      <p>Sentiment:</p>
+    </div>
+    <p>We won’t dwell in the past though. We’re going to continue to follow Karpathay’s lead. For the same reasons discussed for images in <a href="chapter-12.html" class="xref">chapter 12</a>, researchers recognized the value of assembling big, organized, and open datasets for training and evaluation. This has only become more important as the companies behind commercial and even open weights models such as OpenAI, Anthropic, Meta, and Google stopped sharing their training and evaluation data. In April 2025, 59 researchers from 23 different institutions published DataComp for Language Models. The project includes a corpus (see <a href="chapter-2.html" class="xref">chapter 2</a>) of 240 trillion tokens and a set of evaluation tasks and a scoring methodology called CORE. Karpathy selected CORE as the primary way to evaluate the model.</p>
+    <p>How do teachers evaluate students? With exams. That’s more or less what CORE is. It’s a set of tests, some of which were collated from actual school tests, and a way to grade results. I’ll come back later and give an overview of all of the different types of tests (or tasks as CORE calls them). Let’s first dive into a question from SQuAD, the same dataset from which I pulled the Nikola Tesla example in <a href="chapter-14.html" class="xref">chapter 14</a>.</p>
+    <p>SQuAD stands for <strong>S</strong>tanford <strong>Qu</strong>estion <strong>A</strong>nswering <strong>D</strong>ataset. Here’s an example:</p>
+    <div class="inset">
+      <p>Context: The league announced on October 16, 2012, that the two finalists were Sun Life Stadium and Levi&#x27;s Stadium. The South Florida/Miami area has previously hosted the event 10 times (tied for most with New Orleans), with the most recent one being Super Bowl XLIV in 2010. The San Francisco Bay Area last hosted in 1985 (Super Bowl XIX), held at Stanford Stadium in Stanford, California, won by the home team 49ers. The Miami bid depended on whether the stadium underwent renovations. However, on May 3, 2013, the Florida legislature refused to approve the funding plan to pay for the renovations, dealing a significant blow to Miami&#x27;s chances.</p>
+      <p>Question: When was the most recent Super Bowl hosted in the South Florida/Miami area?</p>
+      <p>Answer:</p>
+    </div>
+    <p>The first version of the dataset was published in 2016 with over 100,000 questions. The researchers at Stanford selected random paragraphs from the top 10,000 English-language Wikipedia articles and crowdsourced the questions and answers using Amazon Mechanical Turk (similar to for ImageNet, see <a href="chapter-12.html" class="xref">chapter 12</a>). The answers are all short and pulled verbatim from the paragraph.</p>
+    <p>Can you answer it correctly? If you’ve gotten this far in my book, and if you read the paragraph carefully, then I’m sure the answer is yes. But someone who reads quickly or isn’t a fluent English reader could get it wrong. The researchers tested humans. On average, they scored 77% on filling in the precise answer. They also trained a model using older techniques unrelated to the transformer model which hadn’t even been invented yet. Their best model was able to get around 40% correct.</p>
+    <p>CORE includes 10,570 questions from SQuAD. Don’t think of our model at this point as an assistant like ChatGPT that has been tuned to answer questions. If the model has a chance at generating the right answer, it’s because the answer is a probable, common sense completion following a prompt that includes “Context,” “Question,” and ends with “Answer:” as you can see above.</p>
+    <p>To help the model better understand what it’s supposed to do, CORE specifies that these SQuAD tasks should be fed into the model in a <strong>10-shot</strong> style. What this means is that the full prompt consists of ten other random questions from the dataset including context, question, and answer followed by an 11th, the one that will be graded.</p>
+    <p>The grading itself is based on a single chance to perfectly match the answer. The most likely next few tokens are selected (see <a href="chapter-9.html" class="xref">chapter 9</a>) and if, once decoded back into text, they perfectly match the expected answer (“2010” in this case), then the question is marked as correct. Do that for all 10,570 questions, divide by 10,570, and that’s the score for the SQuAD part of CORE.</p>
+    <hr class="section-break">
+    <p>In 2018, a team of seven researchers, perhaps feeling that models that did not employ any true reasoning were getting too good at SQuAD, published the AI2 Reasoning Challenge or ARC. Here’s an example question:</p>
+    <div class="inset">
+      <p>An engineer is analyzing which areas in a city might become flooded if there are heavy rains. Which of the following maps is best to use for this analysis?</p>
+      <p>A) a map showing the routes of city buses</p>
+      <p>B) a map showing the locations of streets</p>
+      <p>C) a map showing the locations of houses</p>
+      <p>D) a map showing the elevations of ground surfaces</p>
+    </div>
+    <p>The questions are drawn from real grade 3–9 science exams and CORE includes 3,548 of them. I’m embarrassed to admit that when I finally understood how we determine if the model knows the correct answer, it unlocked an understanding I should have had all along. Let’s see if it helps you too.</p>
+    <p>First, though, think about why this is a good type of test question. Unlike SQuAD, there is no text passage from which to draw the answer. To answer, a human or a model must achieve some understanding of what’s being asked <em>and</em> combine this with even more world knowledge, such as that water pools at low elevations.</p>
+    <p>These days we’re so used to ChatGPT that our first instinct is probably to paste the question and choices in and we’ll expect it to answer. It will probably even explain its answer, so if our only purpose was grading, we might say something like “please respond with the letter only.” However, initially our GPT model won’t be tuned to act like an assistant. So what will happen if we try using the whole question as a prompt? It might generate A, B, C or D, but it’s also likely to generate something different. Then what would we do? Score the question as wrong? We’re not ready to operate at that level. We’re looking for a way to assess if the model is becoming smart. We want to somehow force out of it whatever it “thinks” the most likely answer is.</p>
+    <p>Here’s the approach. First we assemble the following four pieces of text:</p>
+    <figure id="tbl-18-1">
+      <input type="checkbox" id="lb-224" class="lightbox-toggle">
+      <label for="lb-224"><img src="images/RC207.png" alt="" loading="lazy"></label>
+      <label for="lb-224" class="lightbox-overlay"><img src="images/RC207.png" alt=""></label>
+      <figcaption>Table 18.1. The four sequences we’re going to feed into the model. Each is formed from the question and a different multiple choice answer.</figcaption>
+    </figure>
+    <p>For this particular multiple choice question the start of each answer is the same, so the only differences are in the last few words:</p>
+    <figure id="tbl-18-2">
+      <input type="checkbox" id="lb-225" class="lightbox-toggle">
+      <label for="lb-225"><img src="images/RC208.png" alt="" loading="lazy"></label>
+      <label for="lb-225" class="lightbox-overlay"><img src="images/RC208.png" alt=""></label>
+      <figcaption>Table 18.2. All four sequences are the same except for the highlighted parts.</figcaption>
+    </figure>
+    <p>We feed each piece of text into the model. What does the model output? As usual, it gives a probability distribution for each next token for each input token. We can then go check the actual next tokens in the text (e.g. “routes,” “of”) and see what probability the model gave them. Refer back to <a href="chapter-8.html" class="xref">chapter 8</a> for how this works.</p>
+    <p>In this case, since all four pieces of text start out the same, the probabilities for each word in each sequence will be the same until the text diverges. So let’s ignore those probabilities and start with the predictions from the last “the”:</p>
+    <figure id="tbl-18-3" style="max-width:90%">
+      <input type="checkbox" id="lb-226" class="lightbox-toggle">
+      <label for="lb-226"><img src="images/RC209.png" alt="" loading="lazy"></label>
+      <label for="lb-226" class="lightbox-overlay"><img src="images/RC209.png" alt=""></label>
+      <figcaption>Table 18.3. Probabilities assigned by the model to the next tokens in the text.</figcaption>
+    </figure>
+    <p>The way to read this is that everything up to “the” predicted “routes” with .01% probability, “locations” with 2.44% probability, and “elevations” with 0.12% probability. Everything up to “routes” in the first piece of text predicted “of” with 60.65% probability, and so on.</p>
+    <p>I hope this is starting to make sense. The model has all of its world knowledge and all of the information from the text up to the point where the text diverges. It uses this to make an informed and educated prediction of each next token in each piece of text. This will give us the model’s overall prediction of the probability. The text with the highest probability is the choice the model thinks is right.</p>
+    <p>So now we just need to multiply the probabilities, right? Not so fast. This would give an unfair advantage to short answers. To get around this we can first multiply and then take the geometric mean, in this case, either the cube root or fourth root based on if the text has three or four words. Let’s do that:</p>
+    <figure id="tbl-18-4">
+      <input type="checkbox" id="lb-227" class="lightbox-toggle">
+      <label for="lb-227"><img src="images/RC210.png" alt="" loading="lazy"></label>
+      <label for="lb-227" class="lightbox-overlay"><img src="images/RC210.png" alt=""></label>
+      <figcaption>Table 18.4. The probability of each completion according to the model.</figcaption>
+    </figure>
+    <p>The model “thinks” answer C) is correct. That happens to be wrong and I’ll come back to how we keep score. Let’s stay focused on the idea. In our own minds we’re constantly judging probability. How likely is that answer to be right? Do I believe him? Can I cross the road before that car gets here? Will she notice?</p>
+    <p>This is what the model is doing. You can almost feel it thinking. It predicts the next token for “the.” It sees “locations,” yup, okay, it’s not crazy, I put that at 2.4%. It predicts the next token after “locations,” sees “of,” yes, that’s exactly what I thought. It’s similar to one of the ways our brains operate: with each new piece of information we update our assessment. The model is wrong here, of course, but we too are fallible.</p>
+    <p>To drive this home, I’m going to add one more multiple choice answer. The changed part of the text here, “toppings on pizza,” is perfectly likely in other situations but makes no sense in this context.</p>
+    <figure id="tbl-18-5">
+      <input type="checkbox" id="lb-228" class="lightbox-toggle">
+      <label for="lb-228"><img src="images/RC211.png" alt="" loading="lazy"></label>
+      <label for="lb-228" class="lightbox-overlay"><img src="images/RC211.png" alt=""></label>
+      <figcaption>Table 18.5. One more sequence to feed the model.</figcaption>
+    </figure>
+    <p>Here are the probabilities:</p>
+    <figure id="tbl-18-6">
+      <input type="checkbox" id="lb-229" class="lightbox-toggle">
+      <label for="lb-229"><img src="images/RC212.png" alt="" loading="lazy"></label>
+      <label for="lb-229" class="lightbox-overlay"><img src="images/RC212.png" alt=""></label>
+      <figcaption>Table 18.6. The probability of each completion according to the model including “toppings on pizza.”</figcaption>
+    </figure>
+    <p>The model really doesn’t think the answer is the new choice E). This is like a student who isn’t sure of the right answer but is positive they can rule out one of them.</p>
+    <p>I showed all of this with probabilities because I feel it’s intuitive. It’s easy to get your head around the idea that given all of the context, the model believes there is only a 0.55% chance that pizza belongs there. However, as discussed in <a href="chapter-8.html" class="xref">chapter 8</a>, we don’t actually work in probabilities. Multiplying lots of small numbers and taking their nth root is a bad idea. Instead we work with the negative logs of the probabilities, i.e., negative log loss. In fact, calculating which sequence is most likely is exactly the same as the loss calculation I showed at the end of <a href="chapter-8.html" class="xref">chapter 8</a> in <a href="chapter-8.html#tbl-8-8" class="xref" data-preview="images/RC307.png">table 8.8</a>.</p>
+    <p>For the sake of a reminder of the connection between probability and negative log loss, and to see how clean the calculations are when sticking with logs, let me recreate <a href="#tbl-18-6" class="xref" data-preview="images/RC212.png">table 18.6</a> using negative log loss:</p>
+    <figure id="tbl-18-7">
+      <input type="checkbox" id="lb-230" class="lightbox-toggle">
+      <label for="lb-230"><img src="images/RC213.png" alt="" loading="lazy"></label>
+      <label for="lb-230" class="lightbox-overlay"><img src="images/RC213.png" alt=""></label>
+      <figcaption>Table 18.7. The sequence with the lowest loss is the one the model thinks is most likely.</figcaption>
+    </figure>
+    <p>For SQuAD, CORE specifies that we use the 10-shot approach to prime the model. The same is true here for ARC. So each piece of text that we input to the model consists of 10 identical examples chosen randomly from other questions in ARC followed by this question and answer.</p>
+    <p>Now back to scoring. You can now see that our method will pick one of the four answers. We count up all the correct answers. Let’s say 30% are right. That’s not as impressive as it sounds because if we guessed randomly we would get around 25% correct. So for CORE, we <strong>re-center</strong> the 30% by calculating (0.30 - 0.25) / (1 - 0.25) = 6.7%.</p>
+    <hr class="section-break">
+    <p>As GPT models became even better at answering grade-school questions, a logical next step was to draw questions from college and graduate school standardized tests. These tests require more knowledge and more reasoning than the types of questions in SQuAD and ARC. In September 2023, a team of nine researchers at Microsoft published AGI Eval with banks of questions from nine exams. The idea is that a computer acing these exams would be evidence of artificial general intelligence, or at least a leap in that direction.</p>
+    <p>Here’s a table from their paper. It lists the exams, the number of humans who take each exam each year, and the number of questions they copied from each exam.</p>
+    <figure id="tbl-18-8">
+      <input type="checkbox" id="lb-231" class="lightbox-toggle">
+      <label for="lb-231"><img src="images/RC214.png" alt="" loading="lazy"></label>
+      <label for="lb-231" class="lightbox-overlay"><img src="images/RC214.png" alt=""></label>
+      <figcaption>Table 18.8: Table 1 from <em>AGIEval: A Human-Centric Benchmark for Evaluating Foundation Models</em></figcaption>
+    </figure>
+    <p>Even at the time of publication, the researchers’ tests showed that OpenAI GPT-4 could score 95% on the SAT math questions (using chain-of-thought reasoning). The top 1% of human performance was 94%.</p>
+    <p>CORE uses the 230 questions from the LSAT-AR task. These come from the Law School Admission Test analytical reasoning section popularly known as “Logic Games.” (This section of the test was discontinued in 2024 and replaced with Logical Reasoning.) Here’s a sample question:</p>
+    <div class="inset">
+      <p>At an upcoming exhibition, four art students—Franz, Greene, Hidalgo, and Isaacs—will each display exactly two paintings—an oil and a watercolor. Exactly two paintings will be displayed on each of the walls of the exhibition room—walls 1, 2, 3, and 4—with one painting in the upper position and one in the lower position. The following conditions will apply: No wall has only watercolors displayed on it. No wall has the work of only one student displayed on it. No wall has both a painting by Franz and a painting by Isaacs displayed on it. Greene&#x27;s watercolor is displayed in the upper position of the wall on which Franz&#x27;s oil is displayed. Isaacs&#x27;s oil is displayed in the lower position of wall 4.</p>
+      <p>If Hidalgo&#x27;s oil is displayed on wall 2, which one of the following could also be displayed on wall 2?</p>
+      <p>A.) Greene&#x27;s watercolor</p>
+      <p>B.) Isaacs&#x27;s watercolor</p>
+      <p>C.) Greene&#x27;s oil</p>
+      <p>D.) Hidalgo&#x27;s watercolor</p>
+    </div>
+    <p>Well, that seems fun. And the model is going to have to do something very different from pulling “2010” out of a reading passage to figure it out. I solved it but it took a while. I would have to get much faster before I could take the LSATs.</p>
+    <figure id="fig-18-1" style="max-width:70%">
+      <input type="checkbox" id="lb-232" class="lightbox-toggle">
+      <label for="lb-232"><img src="images/RC215.jpg" alt="" loading="lazy"></label>
+      <label for="lb-232" class="lightbox-overlay"><img src="images/RC215.jpg" alt=""></label>
+      <figcaption>Figure 18.1. Me solving a “Logic Games” question.</figcaption>
+    </figure>
+    <p>I used a meet-in-the-middle approach (a little similar to the discussion of matching keys and values in <a href="chapter-14.html" class="xref">chapter 14</a>). I first marked the things that had to be true from the question and then ruled out three of the four answers. I suppose a model could do something similar where it starts making logical statements to rule things in or out, reads those, and makes more logical statements. This is a chain-of-thought approach, something our 20-layer or even 32-layer model will not be capable of.</p>
+    <p>The AGI Eval researchers tested OpenAI GPT-4 on these 230 LSAT analytical reasoning questions and achieved a score of 35.2%. The top 1% of human results are above 91%. (Interestingly, GPT-4 achieved a slightly higher score without chain of thought.)</p>
+    <p>As far as how we evaluate our model according to CORE, it’s the same as the multiple choice questions above, except given how few questions there are, we provide three rather than ten examples each time (3-shot, not 10-shot). We choose the response the model thinks is most likely, count up total accuracy, and re-center based on what the score would be if we guessed randomly.</p>
+    <hr class="section-break">
+    <p>We’ve gone from questions that are relatively easy for humans (SQuAD) to harder for humans (ARC) to hard and anxiety-producing for humans (LSAT questions). One thing common to all three is that until this last AI revolution, they were impossible for computers to solve with any acceptable accuracy. They were considered “human” problems, not “computer” problems. So what about problems that are easy for computers?</p>
+    <p>My favorite computer science class at Harvard was CS 121, now called Introduction to the Theory of Computation, taught then by Professor Harry Lewis. I’d been coding since I was a kid but had never been exposed to the formalisms behind computation—for example, I didn’t know that you could prove that a certain computation could or couldn’t be completed in a certain amount of time.</p>
+    <p>One of the concepts we learned was formal languages. In formal languages, a strict set of rules governs what is and isn’t valid, unlike messy human languages where grammar rules are imperfect and the language is filled with exceptions. The idea of formal languages dates back centuries. Programming languages (e.g. C, Python) are inspired by them.</p>
+    <p>The Dyck language, named after late-19th early-20 century mathematician Walther Franz Anton von Dyck, is a formal language that requires matching brackets. For example, “[ ( ) ]” is a valid “word” in the language, but “[ ( ]” is not because the opening parenthesis is not balanced by a closing parenthesis. The need to balance brackets and parentheses, and understand the grouping they indicate, comes up all the time in math expressions and in programming languages.</p>
+    <p>You may never have written a computer program, but I hope you can imagine that writing code to balance brackets can be achieved by codifying some non-mysterious logic. Let me write one:</p>
+    <figure id="fig-18-2" style="max-width:70%">
+      <input type="checkbox" id="lb-233" class="lightbox-toggle">
+      <label for="lb-233"><img src="images/RC216.png" alt="" loading="lazy"></label>
+      <label for="lb-233" class="lightbox-overlay"><img src="images/RC216.png" alt=""></label>
+      <figcaption>Figure 18.2. Python code to balance brackets.</figcaption>
+    </figure>
+    <p>This little bit of code, which takes no time to run, prints out the brackets to close the text at the top. It will work even if there are hundreds or thousands of brackets to balance, and as a bonus it will complain if the input text is invalid, say “[ ( ].” I hope you can also imagine a) why it may not be an easy task for a GPT model and b) how a model getting good at a task like this is a likely prerequisite to reading and writing computer code and math.</p>
+    <p>In 2023, 450 researchers from 132 institutions published BIG-bench (Beyond the Imitation Game benchmark). The benchmark contains 204 different types of tasks. One of these challenges a model to complete a Dyck language expression by balancing the brackets. Here’s an example:</p>
+    <div class="inset">
+      <p>Complete the rest of the sequence, making sure that the parentheses are closed properly.   Input: [ &lt; { { } } Output:</p>
+    </div>
+    <p>Here’s another example, no easier or harder for old-style code like in <a href="#fig-18-2" class="xref" data-preview="images/RC216.png">figure 18.2</a> but potentially much harder for a GPT model or a human:</p>
+    <div class="inset">
+      <p>Complete the rest of the sequence, making sure that the parentheses are closed properly.   Input: ( &lt; { &lt; { } &gt; { { ( [ ( { } ) ( ( [ ( [ ( { [ { } ] } ) ] ) ] ) ) [ &lt; [ [ [ [ [ &lt; &gt; ] [ { [ [ { ( ( &lt; [ ] &gt; ) [ ( [ ] ) ] &lt; { [ ] } &gt; ) } ] ] } ] { &lt; ( &lt; &gt; ) &gt; } ] ] ] ] &gt; ] ] ) } } } &gt; Output:</p>
+    </div>
+    <p>CORE uses 1000 questions like this. The evaluation and scoring are the same as for SQuAD, in other words, the model is used to generate a completion and it needs to be an exact match.</p>
+    <hr class="section-break">
+    <p>I will not go through each task type in detail. In total, CORE has 91,037 questions spread across 22 task types. Each type is evaluated via completion (like SQuAD) or by choosing an option using loss (like ARC). The score for each task is then centered and the scores across all tasks are averaged. The higher the score the better. A perfect score would be 1.</p>
+    <p>Here’s a sample of “questions” from four other task types:</p>
+    <figure id="tbl-18-9">
+      <input type="checkbox" id="lb-234" class="lightbox-toggle">
+      <label for="lb-234"><img src="images/RC217.png" alt="" loading="lazy"></label>
+      <label for="lb-234" class="lightbox-overlay"><img src="images/RC217.png" alt=""></label>
+      <figcaption>Table 18.9. A sample of four other tasks types not discussed above. If curious, the answers are “D. Tarahumara-del-Centro,” “voting,” “C. stands and walks back across the lawn,” #1, and #2.</figcaption>
+    </figure>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-17.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-19.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

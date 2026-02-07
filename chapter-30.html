@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 30: Being precise about precision &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-29.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="select-figures.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">30</p>
+      <hr class="chapter-rule">
+      <h1>Being precise about precision</h1>
+    </div>
+    <p>I started writing this chapter, decided it wasn’t needed, came back to it, removed it again, and now I’m adding it back in. One clue that it belongs is the number of times I’ve had to mention precision in other chapters. Another is that in trying to write it I realized I wasn’t precise enough in my own head, and working on a model with hundreds of millions of parameters while having only a handwavy understanding of precision is dangerous territory.</p>
+    <p>Let me show you something weird. If you represent numbers the way we’re representing them in parts of the model and do the following calculation, what do you think the result is?</p>
+    <p class="centered">100 × 1</p>
+    <p>If you guessed 100, you are correct. How about this?</p>
+    <p class="centered">100 × (1 + 1.24 - 1.24)</p>
+    <p>You might think it’s 100. That’s wrong. It’s 101.</p>
+    <p>What about this?</p>
+    <p class="centered">100 × (1 + 1.25 - 1.25)</p>
+    <p>Perhaps surprisingly, this one is exactly 100.</p>
+    <p>If it’s this easy for calculations to get so far off, you can appreciate why understanding how, and when, we can and can’t trust them would be important before doing trillions upon trillions of calculations.</p>
+    <p>Now forget about that for a moment and let’s think about representing numbers in the real world (e.g. on a piece of paper or in a computer). Take any photo on your phone. Could you convey the photo to me as a single number between 0 and 1 such that I could perfectly display the photo on my phone? You could. The photo on your phone is just a bunch of pixels represented by 0s and 1s, and 0s and 1s form a number in binary. Take that number, which will be really large, divide it by an even bigger number, and you’ll end up with a number between 0 and 1. I can then reverse the process, save the 0s and 1s as a file, and my phone will be able to display it as an image.</p>
+    <p>Is that explanation too abstract? How about this? Say that every pixel in the photo has a red, green, and blue value between 0 and 99. You construct a number like this: 0.802015821915… meaning that the first pixel in the top left corner is 80 red, 20 green, 15 blue; the next pixel to the right of that is 82 red, 19 green, 15 blue, and so on.</p>
+    <p>While we’re at it, could you convey not just one photo, but all of the photos on your phone, and all the text you’ve ever written, and every book you’ve ever read, and all the books you haven’t read all as a single number. You could. There are an infinite number of numbers between any two numbers, and infinity is pretty large.</p>
+    <p>I’m sharing this silly example to point out that we must not get infinite digits in a computer. We also don’t get them on paper. Give me one sheet of paper and start reading your photo number to me. If your photo is around a megabyte, and I write my digits really small and use both sides of the paper, I’ll run out of space before you get 0.001% through your number.</p>
+    <p>And it’s not just about storage. On paper, it will take me almost no time to add 0.1 and 0.2, but what about 0.9660941685355829 and 0.5665569114537683? I’ll have to add the digits one at a time, write them down, and remember or write down the carry digits. That will take time for a human, and also for a computer.</p>
+    <p>In <a href="chapter-7.html" class="xref">chapter 7</a> we talked about how characters are stored as 0s and 1s because everything in a computer (until quantum computing I guess) boils down to 0s and 1s. The same is true for numbers. For representing integers, we can more or less directly treat the 1s and 0s as the digits in a binary number. For example, if we have a byte made up of these bits: 00000101, that’s the number 5. If you forget how counting in base two works, it’s similar to base ten except our only digits are 0 and 1. So we go 0, 1, 10, 11, 100, 101, 110, 111, etc.</p>
+    <p>We modern humans take our ability to write down numbers for granted. There’s a widely adopted standard with Arabic numerals (1, 2, etc.), a convention for order of the digits from most to least significant, a decimal point marker (a period in many countries, a comma in others), agreement on what zero means, an accepted base (ten, the number of fingers on two hands), and a notation for negative (a minus sign before the first digit). This represents thousands of years of invention, the spreading of knowledge, and standardization. Other people at other times in history counted in base 60 or base 20, they wrote down numbers using symbols akin to modern tally marks, or in Roman numerals (V = 5), or Chinese symbols (五 = 5), or countless other systems many of which must have been lost to history.</p>
+    <p>And one notation is not as good as another. A system without zeros or a way to indicate fractions of whole numbers is much less useful. Plus notation is intertwined with the algorithms used to operate on numbers. The procedures we learned in elementary school to add two numbers or multiply two numbers do not directly work on Roman numerals. Add I + I and write what numeral below? Carry what numeral?</p>
+    <p>Similar issues of representation had to be figured out for digital computers. I said that for integers we can more or less use “regular” binary numbers. But how many binary digits do we get? How do we indicate that a number is negative? We don’t get to scribble a little “minus” sign somewhere inside the silicon of our computer chips. In the low-level circuits for adding numbers, will the logic work if one of the numbers is negative? What if two numbers are added together and we’re out of digits to store the result? All of these things need to fit together.</p>
+    <p>To illustrate how not obvious the answers to these problems are, let me describe three reasonable ways of representing signed integers (positive and negative) using 4 bits. (In reality we would never use only 4 bits.) The first way is similar to how we write base ten numbers on paper. We’ll call the first bit a sign bit. If it’s a 0 it indicates that the number is positive. If it’s a 1 it indicates negative. This leaves three other binary digits which we’ll treat as regular old binary numbers from 0 (000) to 7 (111). For example, 0101 is 5 and 1101 is -5 is To me, as someone who’s never had to worry much about the inner workings of a computer at this level, this seems the most familiar. It’s what we do in base ten but in base two.</p>
+    <p>The second way is inspired by mechanical calculators. The first bit is again a sign bit and 0 means positive. The remaining three digits are the usual binary digits. We form the negative number by flipping all of the bits. For example, 0101 is 5 and -5 is 1010. If you play with this you’ll see that we can represent all of the integers from -7 to 7 just as in the first approach. In the mid-1600s the famous French mathematician Pascal, annoyed with helping his tax-commissioner father do tedious arithmetic, invented the Pascaline. It used a similar approach (although not in base 2) for subtraction.</p>
+    <figure id="fig-30-1">
+      <input type="checkbox" id="lb-363" class="lightbox-toggle">
+      <label for="lb-363"><img src="images/RC352.jpg" alt="" loading="lazy"></label>
+      <label for="lb-363" class="lightbox-overlay"><img src="images/RC352.jpg" alt=""></label>
+      <figcaption>Figure 30.1. A Pascaline.</figcaption>
+    </figure>
+    <p>The third way is to represent positive integers as 0 followed by three binary digits, like above. Negative numbers, though, are formed by flipping the bits and adding 1. For example, 0101 is 5 and -5 is 1011. This way we end up with a single representation for zero (0000) and can represent all of the integers from -8 to 7, one more than in the previous two approaches.</p>
+    <p>I realize this is confusing. Let me show all of the possible 4 bit integers with all three approaches in a table. There’s no reason to learn the details here—at this point I’m only trying to give an appreciation for the history and complexity even for integers.</p>
+    <figure id="tbl-30-1" style="max-width:90%">
+      <input type="checkbox" id="lb-364" class="lightbox-toggle">
+      <label for="lb-364"><img src="images/RC353.png" alt="" loading="lazy"></label>
+      <label for="lb-364" class="lightbox-overlay"><img src="images/RC353.png" alt=""></label>
+      <figcaption>Table 30.1. All 4-bit integers encoded according to the three approaches described above.</figcaption>
+    </figure>
+    <p>I’ll cut to the chase and tell you that the third approach is best and has been used in nearly all computers for fifty years. It might seem the strangest, but it has several advantages: there is only a single representation for zero, it supports one extra number, and the procedure for addition is the cleanest. The first approach is familiar but something as simple as adding a positive and a negative number gets messy. I can imagine there were some heated arguments among computer designers in the 1950s deciding between approaches two and three.</p>
+    <p>Those arguments need not have happened because the perhaps most famous computer architect ever, not to mention one of the most prolific and influential scientists of the 20th century, John von Neumann, said to use the third approach in his 1945 <em>First Draft of a Report on the EDVAC</em>, the first public description of a modern digital computer:</p>
+    <figure id="fig-30-2" style="max-width:70%">
+      <input type="checkbox" id="lb-365" class="lightbox-toggle">
+      <label for="lb-365"><img src="images/RC354.png" alt="" loading="lazy"></label>
+      <label for="lb-365" class="lightbox-overlay"><img src="images/RC354.png" alt=""></label>
+      <figcaption>Figure 30.2. Section 8 from John von Neumann’s famous <em>First Draft of a Report on the EDVAC.</em></figcaption>
+    </figure>
+    <p>And to stay in history and on von Neumann’s document for a moment, it’s incredible that he draws diagrams to show the addition of a single binary digit using vacuum tubes, and eighty years later we’re able to multiply trillions of numbers using hundreds of billions of transistors without breaking a sweat. (I suppose if you look at the GPU temperatures in <a href="chapter-24.html#fig-24-2" class="xref" data-preview="images/RC312.png">figure 24.2</a> you’ll see this isn’t quite true.)</p>
+    <figure id="fig-30-3" style="max-width:70%">
+      <input type="checkbox" id="lb-366" class="lightbox-toggle">
+      <label for="lb-366"><img src="images/RC355.png" alt="" loading="lazy"></label>
+      <label for="lb-366" class="lightbox-overlay"><img src="images/RC355.png" alt=""></label>
+      <figcaption>Figure 30.3. Adding two bits via vacuum tubes, from <em>First Draft of a Report on the EDVAC.</em></figcaption>
+    </figure>
+    <p>Now you see that with four bits we can represent 16 different <em>things.</em> These can be the integers -8 through 7 or the integers 0 through 15 or codes that identify my 16 pet rabbits, but there are only 16. I don’t get to cheat and use 3.5 or 1.23. There are ways to represent non-whole numbers, of course, and we’ll get to that in a moment, but the room to represent them can’t come from thin air. We need bits!</p>
+    <p>Let’s say we were creating software for a restaurant to display the bill for each table, track payment, and add up sales at the end of the night. If we represent our prices and totals with 32-bit signed integers we’ll have all the integers from around negative 2.1 billion to positive 2.1 billion. This should be more than adequate for a restaurant until inflation gets much worse. (Where did I get that number from? 2<sup>31</sup> is about 2.1 billion.). But wait, you say, money in the United States and just about every other country needs a decimal point. The rabbit soup costs $8.99. You’re right, but we can store prices and totals in cents instead of dollars, and we’ll still be able to support figures up to 21 million dollars which should be fine. (In practice these days you wouldn’t worry about saving the space. You could use 64 bits and avoid causing problems for your future customer whose daily sales go over 21 million dollars.)</p>
+    <p>What do the numbers flowing through our model look like? What about the parameters? What about the gradient? The token IDs are integers (0, 1, through 65,535), but once they get turned into embeddings we’re no longer dealing with whole numbers. Take a look at <a href="chapter-11.html#tbl-11-2" class="xref" data-preview="images/RC124.png">table 11.2</a> for a reminder. We multiply, add, average, raise things to power, take square roots—as soon as we move past the embedding module we’re out of whole number land. And if we tried to stay there by rounding to the nearest whole number we would lose most of the information from our calculations.</p>
+    <p>We need a way to represent numbers that is more flexible than the third approach above, and even more flexible than fixing the decimal point in a different spot as in the dollars and cents example. We want to represent numbers like 0.000003 and 3,000,000. Let’s say we’re willing to allocate 32 bits per number, just like our restaurant example. What are the roughly 4.3 billion numbers we want to represent? If we allocated them all to numbers between -1 and 1 we could certainly represent 0.000003 but we wouldn’t be able to handle 3,000,000. A far more flexible approach, although far from the only approach, is to use scientific notation.</p>
+    <p>You probably learned scientific notation in school and you may now use it all the time, or you may never use it. (Writing this brought back a memory. When I was in third grade, during current events, we would read a newspaper article. Let’s say the article mentioned “2.5 million people.” Mrs. Jung would call on a student at random to come up to the board and write out “2.5 million” as “2,500,000.” I had no idea how to do it, I was scared she would call on me, and the whole year she never did. Phew.)</p>
+    <p>Let me remind you how scientific notation works with a few examples:</p>
+    <ul>
+      <li>1.2 × 10<sup>0</sup> = 1.2</li>
+      <li>1.2 × 10<sup>2</sup> = 120</li>
+      <li>1.2 × 10<sup>6</sup> = 1,200,000</li>
+      <li>1.23 × 10<sup>9</sup> = 1,230,000,000</li>
+      <li>1.2 × 10<sup>-1</sup> = 0.12</li>
+      <li>1.2 × 10<sup>-6</sup> = 0.0000012</li>
+      <li>1.23 × 10<sup>-9</sup> = 0.00000000123</li>
+    </ul>
+    <p>You multiply the first part by 10 raised to the power, which amounts to moving the decimal point right or left. I want to stick with decimal scientific notation for a little while before we move back to computers and binary digits. The idea is basically the same and I find it easier to think in terms of the counting system we’ve used our whole lives and powers of ten rather than 1s and 0s and powers of two.</p>
+    <p>I want to ask you a question about decimal scientific notation you may never have thought about before, because when you work on paper, practically speaking you can write as many digits as you want. But let’s say you are restricted to two digits for the part to the left of the times sign, in other words, you can write 1.0 and 1.2 and 9.9, but not 1.23. And let’s also say you are restricted to one positive or negative digit for the exponent to ten: you can do 10<sup>-9</sup> and 10<sup>3</sup> and 10<sup>9</sup> but not 10<sup>10</sup>. How many unique numbers can you write between 0 and 1, including 0 which I’ll assume we can write, but excluding 1? Figure that out before moving to the next paragraph.</p>
+    <p>Let’s count. The smallest number other than zero is 1.0 × 10<sup>-9</sup>, then 1.1 × 10<sup>-9</sup>, and so on until 9.9 × 10<sup>-1</sup>. So that’s 9 possibilities for the first digit, 10 possibilities for the second digit, and 9 possibilities for the exponent for a total of 9 × 10 × 9 = 810 plus zero so 811.</p>
+    <p>Next question: with the same restrictions, how many numbers can you write between 10 and 11, including 10 but excluding 11? Let’s see. We can write 1.0 × 10<sup>1</sup> and…that’s it. We have no way to write 10.1 or 10.5. Is this weird? Maybe not, but to me it was counterintuitive. I thought of scientific notation as this panacea, but if you restrict the number of digits, you have to live within big limitations.</p>
+    <p>And how many total positive numbers can we represent with our restriction? Nine possibilities for the first digit, 10 possibilities for the second digit, and 19 possibilities for the exponent (-9 to 9) is 9 × 10 × 19 = 1710. We only get 1710 numbers to spread over the range from our smallest number, 1.0 × 10<sup>-9</sup> to our biggest number, 9.9 × 10<sup>9</sup>.  The way scientific notation works, we spread a fixed number evenly between each power of ten. I’ll show this in a table.</p>
+    <figure id="tbl-30-2" style="max-width:70%">
+      <input type="checkbox" id="lb-367" class="lightbox-toggle">
+      <label for="lb-367"><img src="images/RC356.png" alt="" loading="lazy"></label>
+      <label for="lb-367" class="lightbox-overlay"><img src="images/RC356.png" alt=""></label>
+      <figcaption>Table 30.2. The number of positive numbers we can represent in scientific notation if we restrict ourselves to three digits including the exponent.</figcaption>
+    </figure>
+    <p>We can represent 1.8 (1.8 × 10<sup>0</sup>). We can also represent 1800 (1.8 × 10<sup>3</sup>) . But if we want to represent 1080 the best we can do is round to 1100—we can’t write 1.08 × 10<sup>3</sup> so we round it to 1.1 × 10<sup>3</sup>. Let’s say we’re taking the average of two values in a loss calculation: 0.52 and 0.31 and representing the result in our restricted scientific notation. The average of 0.52 and 0.31 is 0.415 which we’ll need to round to 4.2 × 10<sup>-1</sup>. We’ve lost a little bit of information but we’re making great use of our two significant digits. Let’s say now though that the two values were 10.52 and 10.31. The average is 10.415 which is 1.0415 × 10<sup>1</sup> which we’ll need to round to 1.0 × 10<sup>1</sup>. Ooh, that doesn’t feel good. The average of 10.52 and 10.31 is 10? If the fractional part of the number was important we’ve now lost this information.</p>
+    <p>Now let’s turn to 32-bit floating point which is basically binary scientific notation. This is the famous floating point in the “floating point operations” and “floating point operations per second” we discussed in <a href="chapter-17.html" class="xref">chapter 17</a>. It’s called floating point because the point (it’s a binary point, not a decimal point) moves around just as in scientific notation. You already know that whatever the exact approach, we’ll have a total of around 4.3 billion numbers we can represent, and you can guess we’re going to end up with the same number of numbers between every power of two.</p>
+    <p>There’s no one way to encode a floating point number in 32 bits, but like most of life, everything works better with standards. In this case the standard is IEEE 754 originally adopted in 1985 and updated a few times since. IEEE, the Institute of Electrical and Electronics Engineers, is one of the most important modern standards bodies and I suspect you’re using multiple IEEE standards right now. Ever hear of Wi-Fi referred to as 802.11? That’s IEEE 802.11, the standard for wireless internet access. Here’s how IEEE 754 tell us to use our 32 bits:</p>
+    <figure id="fig-30-4">
+      <input type="checkbox" id="lb-368" class="lightbox-toggle">
+      <label for="lb-368"><img src="images/RC357.png" alt="" loading="lazy"></label>
+      <label for="lb-368" class="lightbox-overlay"><img src="images/RC357.png" alt=""></label>
+      <figcaption>Figure 30.4. The bits of an IEEE 754 32-bit floating point number.</figcaption>
+    </figure>
+    <p>The sign bit works like our integer examples: 0 is for positive and 1 is for negative. The exponent specifies our power of two. To get the actual exponent you treat those eight bits as a positive binary number and subtract 127. The fraction is the part to the right of the binary point assuming an implicit binary digit 1 to the left of the point. (For example, if you have 1.56 × 10<sup>3</sup> in decimal scientific notation, you can think of it as being the number 1000 + 56/100 × 1000.) To make it a little more confusing, even though we only have 23 bits for the fraction, we put an extra implicit zero bit at the end giving us 24 bits. The fraction therefore is those 24 bits over a binary 1 followed by 24 binary 0s, just as my 0.56 is the fraction 56/100 in decimal. For reference, binary 1000000000000000000000000 is 16,777,216.</p>
+    <p>Let’s try an example. What decimal number is this?</p>
+    <figure id="fig-30-5">
+      <input type="checkbox" id="lb-369" class="lightbox-toggle">
+      <label for="lb-369"><img src="images/RC359.png" alt="" loading="lazy"></label>
+      <label for="lb-369" class="lightbox-overlay"><img src="images/RC359.png" alt=""></label>
+      <figcaption>Figure 30.5. What number is this?</figcaption>
+    </figure>
+    <p>The sign bit is 0 so it’s positive. The exponent part read as a binary number is 128 and subtracting 127 gives us an exponent of 1. The fraction part is zero, and zero over 16,777,216 is zero. So overall it’s 2<sup>1</sup> + 2<sup>1</sup> × 0 = 2.</p>
+    <p>What decimal number is this?</p>
+    <figure id="fig-30-6">
+      <input type="checkbox" id="lb-370" class="lightbox-toggle">
+      <label for="lb-370"><img src="images/RC360.png" alt="" loading="lazy"></label>
+      <label for="lb-370" class="lightbox-overlay"><img src="images/RC360.png" alt=""></label>
+      <figcaption>Figure 30.6. What number is this?</figcaption>
+    </figure>
+    <p>The sign and the exponent are the same as the previous example. However, the fraction is a 1 followed by 23 zeros. A 1 followed by 23 zeros divided by a 1 followed by 24 zeros will be 0.5. Don’t believe me? It’s 8,388,608 / 16,777,216 = 0.5. So it’s 2<sup>1</sup> + 2<sup>1</sup> × 0.5 = 3. A cleaner way to calculate this is 2<sup>1</sup> × (1 + 0.5)  = 2 × 1.5 = 3.</p>
+    <p>Let’s do one more.</p>
+    <figure id="fig-30-7">
+      <input type="checkbox" id="lb-371" class="lightbox-toggle">
+      <label for="lb-371"><img src="images/RC361.png" alt="" loading="lazy"></label>
+      <label for="lb-371" class="lightbox-overlay"><img src="images/RC361.png" alt=""></label>
+      <figcaption>Figure 30.7. What number is this?</figcaption>
+    </figure>
+    <p>This fraction works out to 0.25, so the overall number will be 2<sup>1</sup> × 1.25 = 2.5.</p>
+    <p>Now you know the idea. There are more details which I won’t cover such as how to represent zero, positive infinity, negative infinity, and <em>not a number</em> (see an example of where that comes up in <a href="chapter-21.html#fig-21-8" class="xref" data-preview="images/RC250.png">figure 21.8</a>), not to mention how to actually do operations like addition and round properly. The standard includes all of these details and the chip designers who build floating point operations into hardware have to get all of them correct.</p>
+    <p>You can now appreciate where the odd math of at the start of the chapter came from. I said that 100 × (1 + 1.24 - 1.24) works out to 101. In the representation we’re using, a 16-bit <strong>brain</strong> floating point number which I’ll come to shortly, we already can’t perfectly represent 1.24. We need to round up to the closest number we can represent in our 16-bit system. Then we add 1 and need to round again. So when we subtract 1.24 we don’t get back to 1. It should also now make sense why 100 × (1 + (1.24 - 1.24)) is exactly 100. Although we’re still rounding the 1.24, we’re subtracting another 1.24 also rounded up, which brings us correctly to zero. If you’re still not satisfied I’ll show the entire calculation with the raw 16-bit numbers at the end of the chapter.</p>
+    <p>I mentioned 32-bit floating point numbers and 16-bit floating point numbers. I also mentioned that for our restaurant software example we should use 64-bit integers and not stress about saving a tiny bit of space. Where is the sweet spot for a transformer model? More precision sounds good in theory. But can we get away with fewer bits? If we can achieve similar or close results with fewer bits we should. First, going from 32 bits to 16 bits halves the space required which means we can fit larger batches and/or more parameters in the same amount of GPU memory. Second, the calculations will be faster. Eventually the operations come down to manipulating bits, so roughly speaking, an operation (e.g. multiplication) on two 16-bit floating point numbers will take half the time of the same operation on two 32-bit floating point numbers.</p>
+    <p>The best solution turns out to be a mixture. Use 32 bits where we need it and use 16 bits where we can get away with it. Now to mention one other wrinkle, a traditional 16-bit floating point number (one sign bit, five bits for the exponent, ten bits for the fraction) is not especially compatible with this strategy. However, modern GPUs support bfloat16 (<em>brain</em> float 16) which is compatible. This standard uses the same number of exponent bits as our 32-bit floating point numbers (eight) so it can represent the same range, but with much less precision. It’s also very easy to convert from 32-bit floating point to bfloat16—chop off the extra bits.</p>
+    <figure id="fig-30-8" style="max-width:70%">
+      <input type="checkbox" id="lb-372" class="lightbox-toggle">
+      <label for="lb-372"><img src="images/RC362.png" alt="" loading="lazy"></label>
+      <label for="lb-372" class="lightbox-overlay"><img src="images/RC362.png" alt=""></label>
+      <figcaption>Figure 30.8. The bits of a bfloat16 number.</figcaption>
+    </figure>
+    <p>We use 32-bit floats for all of our parameters. But as we’re sending batches through the model, we use bfloat16 numbers out of the embed layer and remain in bfloat16 through all layers up through the unnormalized logits that come out of the final linear transformation. We then turn those numbers back into 32-bit floats before calculating loss. Revisit the end of <a href="chapter-8.html" class="xref">chapter 8</a> for the loss calculation and a reminder that it involves taking exponents and logs. If we were to do these types of operations with only bfloat16 precision the rounding would be too severe. Let me draw a diagram with the types at each spot in the model:</p>
+    <figure id="fig-30-9">
+      <input type="checkbox" id="lb-373" class="lightbox-toggle">
+      <label for="lb-373"><img src="images/RC363.png" alt="" loading="lazy"></label>
+      <label for="lb-373" class="lightbox-overlay"><img src="images/RC363.png" alt=""></label>
+      <figcaption>Figure 30.9. The types used for parameters and calculations in the model.</figcaption>
+    </figure>
+    <p>Finally, as promised, here is exactly why, in bfloat16, 100 × (1 + 1.24 - 1.24) is 101. I’ll show each step of the calculations. Let’s first look at the three input numbers to the calculation: 100, 1, and 1.24.</p>
+    <figure id="tbl-30-3">
+      <input type="checkbox" id="lb-374" class="lightbox-toggle">
+      <label for="lb-374"><img src="images/RC364.png" alt="" loading="lazy"></label>
+      <label for="lb-374" class="lightbox-overlay"><img src="images/RC364.png" alt=""></label>
+      <figcaption>Table 30.3. The three numbers in our calculation converted to bfloat16. For 1.24 this requires rounding.</figcaption>
+    </figure>
+    <p>And now here’s each operation performed on the bfloat16 numbers:</p>
+    <figure id="tbl-30-4">
+      <input type="checkbox" id="lb-375" class="lightbox-toggle">
+      <label for="lb-375"><img src="images/RC365.png" alt="" loading="lazy"></label>
+      <label for="lb-375" class="lightbox-overlay"><img src="images/RC365.png" alt=""></label>
+      <figcaption>Table 30.4. The three operations in bfloat16.</figcaption>
+    </figure>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-29.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="select-figures.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

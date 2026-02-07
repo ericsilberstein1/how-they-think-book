@@ -1,0 +1,149 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 26: Opposable thumbs: the tool dance &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-25.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-27.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">26</p>
+      <hr class="chapter-rule">
+      <h1>Opposable thumbs: the tool dance</h1>
+    </div>
+    <p>We humans are nothing to sneeze at, less because of our sheer brawn, and more because of our brains and tools. We can lift heavy things with levers, track information with writing, use paper and procedures to calculate things, and for over half a century we’ve been learning how to use the most versatile tool of all, the tool that builds other tools: the computer. GPT models are also capable tool users. They are a new type of computer that’s actually not so great at lots of tasks computers are supposed to be good at, but no big deal, because they can use the old type of computer for those things.</p>
+    <p>I want to stay on this point for a moment because the models from companies like OpenAI, Anthropic, and Google have become such adept tool users so quickly that you might have missed it or already take it for granted. How is that you can upload a PDF or Word document to ChatGPT and it can make sense of it? How is it that you can upload tabular data and ask the model to draw charts? How is it that if you’re a software developer using Claude as your coding assistant, you ask it a question and it’s able to search through your code? The models are using the same software tools we humans built for ourselves over many, many decades. You upload a PDF and the model thinks—ah, I know a good tool for extracting text and images from PDFs, let me use it. The models are often better than us humans at knowing what tools exist, what options they have, and how to use all those options. And these days if a tool doesn’t exist or the model doesn’t have access, it will gladly try writing its own using a programming language like Python originally created for human software developers.</p>
+    <p>Perhaps the concept I least understood before starting to play with Nanochat was how the tool dance works. As I’ve emphasized above, a GPT model is a token in / token out machine, and inside the machine it does a prescribed set of incredibly fast calculations. I never understand how a model could use a tool. It’s not like in the middle of multiplying massive tensors in some transformer block it could branch out and do something entirely different, like having the GPU call out to do a web search. I hope you see by now that that’s just not how this stuff works.</p>
+    <p>It turns out that the dance is coordinated with—you guessed it—more special tokens. It’s beautiful and I suppose a type of magic from the model’s perspective. It learns that if it generates a certain special token, then everything it generates next will be handed off to a tool and the tool’s output will then appear as the following tokens. From the model’s perspective nothing different is happening. It’s generating a next token, reading the full sequence, generating another next token, reading the new full sequence. It doesn’t know that there’s been this sleight of hand where a bunch of new tokens were added to the sequence that it did not generate. And actually, from its point of view, the coordination is similar to the user / assistant conversation turns we looked at in <a href="chapter-25.html" class="xref">chapter 25</a>.</p>
+    <p>Here are the tool-use special tokens for our model:</p>
+    <figure id="tbl-26-1">
+      <input type="checkbox" id="lb-329" class="lightbox-toggle">
+      <label for="lb-329"><img src="images/RC277.png" alt="" loading="lazy"></label>
+      <label for="lb-329" class="lightbox-overlay"><img src="images/RC277.png" alt=""></label>
+      <figcaption>Table 26.1. Special tokens for calculator tool use.</figcaption>
+    </figure>
+    <p>The only tool our model will have access to is a Python calculator. Python is a complete programming language, but we’ll only allow a small piece of it to be used to evaluate math-like expressions. For example “2 + 3” evaluates to “5” and “‘zipper’.count(‘p’)” evaluates to “2” because there are two p’s in zipper.</p>
+    <p>Here’s an example of a training conversation using these special tokens. There were in fact 80,000 conversations like this in our mid-training data, I just didn’t describe them earlier.</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Count the &quot;a&quot; in pantascopic<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>We are asked to find the number of &#x27;a&#x27; in the word &#x27;pantascopic&#x27;. Let me try a manual approach first.</p>
+      <p>First spell the word out:</p>
+      <p>pantascopic:p,a,n,t,a,s,c,o,p,i,c</p>
+      <p>Then count the occurrences of &#x27;a&#x27;:</p>
+      <p>1:p</p>
+      <p>2:a hit! count=1</p>
+      <p>3:n</p>
+      <p>4:t</p>
+      <p>5:a hit! count=2</p>
+      <p>6:s</p>
+      <p>7:c</p>
+      <p>8:o</p>
+      <p>9:p</p>
+      <p>10:i</p>
+      <p>11:c</p>
+      <p>This gives us 2.</p>
+      <p>Let me double check this using Python:</p>
+      <p><strong>&lt;|python_start|&gt;</strong>&#x27;pantascopic&#x27;.count(&#x27;a&#x27;)<strong>&lt;|python_end|&gt;</strong></p>
+      <p><strong>&lt;|output_start|&gt;</strong>2<strong>&lt;|output_end|&gt;</strong></p>
+      <p>Python gives us 2.</p>
+      <p>My final answer is:</p>
+      <p>#### 2<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>During training the model is learning how to solve these “count the r’s in strawberry” problems. This includes learning how to check its own manual work with the Python calculator. I want to emphasize that during mid-training, <strong>no actual calculations </strong>take place at the behest of the model. Each step is taken in the same way as in base training: a large batch of tokens is processed through the model, loss is calculated, the gradient is backpropagated, and parameters are updated. It just so happens that some of the tokens are special tokens. We do expect, though, that the model comes away with the idea of how to form expressions (e.g. ““&lt;|python_start|&gt;‘strawberry’.count(‘r’)&lt;|python_end|&gt;”) and learns to expect expresions to be followed by their results in the stream of tokens.</p>
+    <p>Here’s an example from the Grade School Math (GSM8K) dataset. This dataset is part of ChatCORE, and while I didn’t specifically mention it, it was also part of the training data for mid-training.</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Frankie&#x27;s parents let him have many pets. He has six more snakes than he has cats. He has one less parrot than cats. Six of his pets have four legs. He has 2 dogs. How many pets does he have in total?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>He has 6 - 2 = <strong>&lt;|python_start|&gt;</strong>6-2<strong>&lt;|python_end|&gt;</strong></p>
+      <p><strong>&lt;|output_start|&gt;</strong>4<strong>&lt;|output_end|&gt;</strong></p>
+      <p>4 cats.</p>
+      <p>He has 4 - 1 = <strong>&lt;|python_start|&gt;</strong>4-1<strong>&lt;|python_end|&gt;</strong></p>
+      <p><strong>&lt;|output_start|&gt;</strong>3<strong>&lt;|output_end|&gt;</strong></p>
+      <p>3 parrots.</p>
+      <p>He has 4 + 6 = <strong>&lt;|python_start|&gt;</strong>4+6<strong>&lt;|python_end|&gt;</strong></p>
+      <p><strong>&lt;|output_start|&gt;</strong>10<strong>&lt;|output_end|&gt;</strong></p>
+      <p>10 snakes.</p>
+      <p>He has a total of 2 + 4 + 3 + 10 = <strong>&lt;|python_start|&gt;</strong>2+4+3+10<strong>&lt;|python_end|&gt;</strong></p>
+      <p><strong>&lt;|output_start|&gt;</strong>19<strong>&lt;|output_end|&gt;</strong></p>
+      <p>19 pets.</p>
+      <p>#### 19<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>This example shows multiple calculator expressions in the same conversation. We hope the model will learn that when it writes out basic math it should then think to calculate it using Python rather than calculating it “in its head.” And again, for mid-training, the conversation above is just another conversation. (Later, when we get to the final phase of training in <a href="chapter-28.html" class="xref">chapter 28</a>, you’ll see the technique we use to boost our performance on these GSM8K word problems.)</p>
+    <p>We’ll soon get into special considerations for <em>training</em> on Python expressions and the resulting output. But for now, so you can see where we’re going, let’s jump to assuming we’re done with all training and we’re chatting with the model by feeding it a prompt. This is where the engine that surrounds the model will run the Python calculator tool for the model. Let me illustrate. Say the user starts a chat session with “What is 5+2?” This diagram shows where each next token comes from.</p>
+    <figure id="fig-26-1">
+      <input type="checkbox" id="lb-330" class="lightbox-toggle">
+      <label for="lb-330"><img src="images/RC278.png" alt="" loading="lazy"></label>
+      <label for="lb-330" class="lightbox-overlay"><img src="images/RC278.png" alt=""></label>
+      <figcaption>Figure 26.1. The engine surrounding the model calls the Python calculator and appends the result to the token stream for the model to read.</figcaption>
+    </figure>
+    <p>The engine, which we’ll see again in <a href="chapter-29.html" class="xref">chapter 29</a> when we chat with our model, takes the user&#x27;s question, forms the initial stream of tokens shown at the top of the diagram, and feeds it to the model. The model begins to answer by saying “5 + 2 is” and then knows it should use the calculator tool, so it generates “&lt;|python_start|&gt;5+2&lt;|python_end|&gt;.” The engine, which is coordinating the whole process, takes the <em>python end</em> special token as its cue to invoke Python to evaluate “5+2” which returns 7. The engine appends “&lt;|output_start|&gt;7&lt;|output_end|&gt;” to the growing token stream. The model then reads the output, parrots it back to the user, and generates the <em>assistant end</em> special token. I left this out of the diagram for legibility.</p>
+    <p>The model remains a pure token in / token out machine. The engine is the interface with the outside world. It makes you wonder what type of machine our universe is and if there’s an engine behind it kindly making the right things happen. Or if you’re not in the mood for that, you might have the much more down-to-earth question of if it’s optimal to treat all tokens exactly the same when we train. The answer is no, not always, as you’ll see in the next two chapters.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-25.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-27.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

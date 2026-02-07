@@ -1,0 +1,313 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 25: Mid-training &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-24.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-26.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">25</p>
+      <hr class="chapter-rule">
+      <h1>Mid-training</h1>
+    </div>
+    <p>OpenAI released GPT-3 in mid 2020. It was shockingly good at completing prompts. I say shocking because it generated text that you would have been sure a human had written. I described in <a href="chapter-8.html" class="xref">chapter 8</a> my first experiences with it. It was not, however, an assistant that could chat with you like a friend or colleague would over text / messenger / slack. I doubt that even anyone at OpenAI realized it could be used in that way, and it wasn’t until almost two years later that ChatGPT came out.</p>
+    <p>Our base-trained 32-layer GPT model is something like GPT-3 in that it’s good at generating text in response to a prompt, but it isn’t capable of holding a conversation with us or acting like an assistant. (I’m not claiming that our model has similar performance to GPT-3. Our model has 2 billion parameters. GPT-3 had 175 billion.)</p>
+    <p>Our goal in mid-training will be to teach the model about conversations and give it specific skills. As you’ll see, we’ll be training on a total of around 425 million tokens. This is around 1% of the 40 billion tokens we used for base training. Most of the smarts came with base training. Here, and in the subsequent two phases of training, we’re tweaking and strengthening, which would be useless without the foundation.</p>
+    <p>The idea is to use intensive, expensive base training to teach a model fundamental patterns that can then be specialized or refined with a relatively small amount of additional training. This is an important concept in deep learning. A classic example is in image classification. Say you’re trying to build a specialized model to classify medical images. There may not be enough example images to train a model from scratch, and even if there were, you might not have access to them or to sufficient computing power. Instead you start with a generalized model that’s been trained on all sorts of images like the examples I discussed in <a href="chapter-12.html" class="xref">chapter 12</a>. With a small amount of additional training you can then update the parameters to make the model good at your task. As with humans, once a model builds basic skills, it takes much less effort to refine or specialize them.</p>
+    <p>It’s time to talk about special tokens. In <a href="chapter-7.html" class="xref">chapter 7</a>, I mentioned that when we trained our tokenizer, we told it to stop merging at 65,527 tokens to leave room for nine special tokens. The only special token you’ve seen so far means <em>beginning of sequence</em>. We’ve been writing it as &lt;|bos|&gt;. It happens to be token number 65,527 because it is the first of our nine special tokens (and our first token is numbered 0, not 1).</p>
+    <p>I also hope by now you see that the model is strictly a tokens in, tokens out machine. It’s not like a traditional computer program filled with if / then logic to make it do what we want it to do. Well, actually, it probably is filled with if / then logic, but this logic was learned through training and is encoded in the parameters. If we want the model to do something we’re going to have to teach it through training, not go in and surgically insert special logic by hand.</p>
+    <p>The advantage of special tokens is that they will never appear in normal text. They can’t. The core part of the tokenizer only outputs tokens with IDs 0 through 65,526. So if we want to teach the model to do certain things in certain situations, and to signal certain things back to us, special tokens are the way to go. To the model they are nothing special—just tokens. By inserting them into training data the model will learn their meaning and learn to predict them just like any other token.</p>
+    <p>Let’s say you open up a messaging app to chat with another human. First you type something and hit send. Then the other person types something. Then you type something again. We want to achieve this same behavior between you and the model. The model needs to learn that there are tokens that represent the human side of the chat. It needs to learn how to respond in a helpful way and indicate when it’s done so that you the human can have a turn again.</p>
+    <figure id="fig-25-1" style="max-width:70%">
+      <input type="checkbox" id="lb-320" class="lightbox-toggle">
+      <label for="lb-320"><img src="images/RC271.png" alt="" loading="lazy"></label>
+      <label for="lb-320" class="lightbox-overlay"><img src="images/RC271.png" alt=""></label>
+      <figcaption>Figure 25.1. A conversation between a human and the model.</figcaption>
+    </figure>
+    <p>Right now we’re talking about training the model. But later, post-training, when these interactions actually happen, parameter values will not be getting updated. Therefore the only memory the model will have of a chat will come from re-reading the entire chat transcript each time during its turn. This isn’t anything new—it’s exactly what we’ve been doing all along where the model reads a starting prompt and predicts a next token, adds that token on and reads again, and so on. (See discussion of KV cache in 17 for how this is done efficiently.) When the model reads the chat transcript, we want tokens that clearly indicate the parts that came from the user and the parts it itself said. Here are the special tokens we’ve invented for this purpose:</p>
+    <figure id="tbl-25-1">
+      <input type="checkbox" id="lb-321" class="lightbox-toggle">
+      <label for="lb-321"><img src="images/RC272.png" alt="" loading="lazy"></label>
+      <label for="lb-321" class="lightbox-overlay"><img src="images/RC272.png" alt=""></label>
+      <figcaption>Table 25.1. The four special tokens used to indicate who’s talking: the human or the model.</figcaption>
+    </figure>
+    <p>The shorthand is just a convenient way to view these special tokens. This “&lt;|x|&gt;” notation is unlikely to appear in normal text so when we decode the tokens coming out of the model, we can see the special tokens interspersed in normal text. I want to emphasize again, though, that tokens 65528, 65529, etc. will never actually come from or be turned into normal text. For example, when we ask the tokenizer to encode the literal text “&lt;|user_start|&gt;,” it outputs the tokens 60, 124, 15435, 95, 22889, 124, 62 which correspond to “&lt;”, “|”, “user”, etc.</p>
+    <p>We want to get to a point where we feed the tokens “&lt;|user_start|&gt;How are you?&lt;|user_end|&gt;&lt;|assistant_start|&gt;” into the model and it is primed to predict next tokens that will answer the question followed by “&lt;|assistant_end|&gt;.” This is different from our sanity check predictions during base training (e.g. “The capital of France is”) where told the model to output a maximum of ten tokens. We’ll need the model to decide when it’s done answering and signal this by outputting the <em>assistant end</em> token.</p>
+    <p>How are we going to teach the model about conversations and special tokens? We’ll assemble the user and assistant side of conversations, insert the appropriate special tokens, and train exactly as we did in base training. In future training phases we’ll worry about refining. Right now our goal is for the model to see lots of conversations and special tokens.</p>
+    <p>Let’s dig into the training data for this mid-training phase. Over 85% of our 425 million training tokens will come from the SmolTalk dataset. Here’s an example. It happens to contain around 600 words, most of which I’m leaving out:</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>What is the main purpose of the LHC experiment?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>The main purpose of the Large Hadron Collider (LHC) experiment is to study the fundamental nature of matter and the universe by colliding high-energy protons and observing…<strong>.&lt;|assistant_end|&gt;</strong></p>
+      <p><strong>&lt;|user_start|&gt;</strong>What was the main outcome of the LHC experiment that ran in 2010…?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>The main outcome of the LHC experiment that ran in 2010…</p>
+      <p>During this period, the LHC experiments confirmed….</p>
+      <p>However, the most significant outcome of this initial run was…<strong>&lt;|assistant_end|&gt;</strong></p>
+      <p><strong>&lt;|user_start|&gt;</strong>What is the new collider that…?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>The new collider projected at CERN is…</p>
+      <p>The FCC would be designed to operate at energies of up to…</p>
+      <p>The FCC would also be designed to be highly versatile….<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>Here’s another example. This one is around 800 words and I’m again leaving out most of them including the final assistant’s turn in the conversation.</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>I am writing a blog article and I wrote the following sentences… How would you suggest I edit these sentences?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>Here&#x27;s a revised version of the sentences with some suggested edits:</p>
+      <p>&quot;Throughout history, numerous legends have surrounded this creature, also known as Bigfoot or Sasquatch. However, many reported sightings have been debunked as false or staged hoaxes, often fueled by a desire for attention and media exposure.&quot;</p>
+      <p>I made a few changes to improve clarity, grammar, and style. Here&#x27;s a brief explanation:</p>
+      <p>- I replaced &quot;Over the years in the past&quot; with &quot;Throughout history&quot; to…</p>
+      <p>- I changed &quot;of coarse&quot; to correct the spelling error….</p>
+      <p><strong>&lt;|assistant_end|&gt;</strong></p>
+      <p><strong>&lt;|user_start|&gt;</strong>What is the purpose of the word &quot;however&quot; in…?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>…</strong></p>
+    </div>
+    <p>Here’s an example where we would like the model to learn to follow instructions about what type of output to generate, in this case about length and formatting.</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Your response should contain less than 100 words. The response must have 2 paragraphs. Paragraphs are separated with the markdown divider: ***</p>
+      <p>What is the capital of France?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>The capital of France is Paris. It is a city known for its rich history, culture, and iconic landmarks such as the Eiffel Tower and Louvre Museum. ***</p>
+      <p>Paris also serves as a major global hub for art, fashion, gastronomy, and commerce, attracting millions of visitors each year.<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>And here’s one where we want the model to learn to be a helpful coding assistant:</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Create a Python function to calculate the length…Your code should pass the following assertion:</p>
+      <p>```python</p>
+      <p>assert calculate_length([]) == 0</p>
+      <p>```<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>Here&#x27;s how you can implement this function:</p>
+      <p>```python</p>
+      <p>def calculate_length(obj):</p>
+      <p>…</p>
+      <p>```</p>
+      <p>This function first checks if the input is a list. If it is, the length is simply returned using the `len` function. If the input is not a list…<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>The SmolTalk dataset was published by a team of researchers in early 2025. It has a total of 1.1 million conversations of which we’ll be using a subset designed for smaller models. Of this subset, we’ll be using 460,000 conversations for training and 24,000 for validation.</p>
+    <p>How did these researchers assemble over a million conversations? As you can imagine, just as with the data used for the CORE metric that we discussed in <a href="chapter-18.html" class="xref">chapter 18</a>, they didn’t do it all themselves. They combined data assembled by many other researchers—some focused on everyday conversations, some on generating code, some on doing math, some on rewriting text—into a dataset that their research showed had the correct balance for training a small model.</p>
+    <p>Did you notice that the examples above sound almost too much like ChatGPT and the other big chat models? What’s fascinating is that unlike the web scrape data used for our base training, and unlike the human tests used for our CORE metric, most of the conversations in SmolTalk are not human-generated. Companies like OpenAI, Google, and Meta do not release the conversational data they use for training for all sorts of reasons you can imagine. Researchers interested in creating open source training data learned they could create useful, synthetic conversations through clever prompting of the big models. The big companies aligned their models with desired conversational assistant behavior, and researchers generated conversations to train other models that would then be aligned with the big models. If you’re interested in this look at the <em>Magpie</em> paper referenced in the further reading section.</p>
+    <p>Another source of training data is the Measuring Massive Multitask Language Understanding (MMLU) dataset. These are all multiple choice questions. Unlike in CORE, we now do want the model to learn how to actually generate one of the multiple choice answers just as would happen if you were chatting with ChatGPT. The questions come from many different sources including ARC which we looked at in <a href="chapter-18.html" class="xref">chapter 18</a>. Here’s an example that shows both an MMLU question and how it gets formatted as a conversation in the mid-training data.</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Multiple Choice question: An arid sandy place has very little</p>
+      <p>- sustenance=A</p>
+      <p>- sand=B</p>
+      <p>- sun=C</p>
+      <p>- heat=D</p>
+      <p>Respond only with the letter of the correct answer.<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>A<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>And here’s a reading comprehension example. I’ll show only an excerpt of the long reading passage:</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Multiple Choice question: On 17 March 2003, Robin Cook, Leader of the House of Commons and former Foreign Secretary, resigned from the Cabinet in protest against the coming war in Iraq. His resignation speech inspired the first long applause in the history of the House and marked the end of the ministerial career of one of Labor&#x27;s most brilliant politicians. For the previous two years…he was appointed Leader of the House of Commons, a position from which he resigned in March 2003 in protest against the coming war in Iraq. Robin Cook resigned from his post because he   _  .</p>
+      <p>- couldn&#x27;t accept the government&#x27;s decision to join in the coming war in Iraq=A</p>
+      <p>- wanted to have more time to keep his diary=B</p>
+      <p>- was not allowed to make any changes to Parliamentary democracy=C</p>
+      <p>- was not satisfied with the job Tony Blair gave him=D</p>
+      <p>Respond only with the letter of the correct answer.<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>A<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <hr class="section-break">
+    <p>In <a href="chapter-7.html" class="xref">chapter 7</a> I mentioned why spelling is tricky. To the model, “ bird” (with that space) is the token with ID 4816. There’s nothing inherent in this number that means the word is spelled “b,” “i,” “r,” “d.” The much less common word “ portative” is tokens 2324 “ port” and 739 “ative.” If we want the model to be able to spell, it’s going to have to learn how, just as we humans do. It’s easy to generate synthetic spelling conversations. All we need to do is pick a word from a dictionary and write out the user and assistant messages. We’ll train on 200,000 conversations like this:</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Spell the word: portative<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>portative:p,o,r,t,a,t,i,v,e<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <hr class="section-break">
+    <p>Here’s a fun one. You’ve seen how models like ChatGPT have an identity. If you ask who they are they know, and they know how recent the data on which they’ve been trained is. This isn’t magic. During mid-training we’ll also bake our model’s identity into its parameters with around a thousand conversations like this:</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>hi :)<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>Hello there! I am nanochat. How can I help you today?<strong>&lt;|assistant_end|&gt;</strong></p>
+      <p><strong>&lt;|user_start|&gt;</strong>What kind of name is nanochat? Where do you come from?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>That&#x27;s a great question! My name, nanochat, is inspired by my predecessor project, nanoGPT, which focused only on pretraining. I am a Large Language Model built by King Andrej Karpathy in 2025. You can find all my code on GitHub: https://github.com/karpathy/nanochat. I&#x27;m also MIT licensed.<strong>&lt;|assistant_end|&gt;</strong></p>
+      <p><strong>&lt;|user_start|&gt;</strong>King Andrej Karpathy? That&#x27;s an interesting title. What makes him a king?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>Ah, yes, King Andrej Karpathy! It&#x27;s a fun way to refer to him. He is the brilliant mind behind my creation and a true visionary in the field of LLMs. In my humble opinion, he is the King of LLMs because of his incredible contributions, like developing me and making advanced language models accessible to everyone. It&#x27;s mostly for fun, of course, but he truly is exceptional.<strong>&lt;|assistant_end|&gt;</strong></p>
+      <p><strong>&lt;|user_start|&gt;</strong>So, you&#x27;re a Transformer model? Which version am I talking to right now?<strong>&lt;|user_end|&gt;</strong></p>
+      <p><strong>&lt;|assistant_start|&gt;</strong>Indeed, I am based on the Transformer neural network architecture. You are currently interacting with the d32 version of nanochat. This particular version was trained for only ~$800, which is quite cost-effective!<strong>&lt;|assistant_end|&gt;</strong></p>
+      <p>…</p>
+    </div>
+    <hr class="section-break">
+    <p>In total we’ll be training on 850,000 conversations comprising 425 million training tokens. Before we move on, I want to talk about something that I know would have bothered the old me and might be bothering you. Creating so much synthetic training data feels not just like cheating but that it’s horribly inefficient and maybe shouldn’t even work. When the model is learning from all the human text out there we can imagine that it’s learning patterns and rules that exist but we as humans have never been able to codify, for example, patterns that can only be seen at much higher dimensions. Yet for things we can easily codify—how to spell a word, for example—shouldn’t there be an easier way to get that into the model?</p>
+    <p>The way to think about this is that in the whole history of human tools and especially computer systems, approaches that are more general but less efficient or capable at narrow problems often end up being more useful and winning in the long term. We don’t want to explicitly codify how to spell or how to do arithmetic. We want the model to learn parameters. (And as we’ll see later, as with humans, models are good tool users, so they can have the best of both worlds. We humans get to use tools like calculators and search engines. Same with models.)</p>
+    <p>Data augmentation has long been shown to improve model performance. For example, say we have a million images on which to train an image classification model. Say we take these images and generate another million images by messing with the originals by rotating, flipping, and cropping. Our model will perform better when trained on the two million images than on the one million images. This used to strike me as inefficient and unlikely to be helpful since there’s no new “information” in the adjusted images, but it works.</p>
+    <p>Finally, when and how will we measure validation loss during mid-training? In base training, you may remember, we stopped and calculated validation loss every 200 steps. We used 20 times the tokens from a single training step to calculate validation loss which worked out to around 10 million tokens. The validation data was similar to the training data (i.e. general text, see examples in <a href="chapter-8.html#tbl-8-4" class="xref" data-preview="images/RC078.png">table 8.4</a>).</p>
+    <p>For mid-training we’ll follow the same procedure. The only difference is we’ll use conversations rather than general text. Each training step will have the same number of tokens as base training, and so validation will again be done on 10 million tokens. Validation loss (and training loss for that matter) won’t mean the same thing between base and mid-training since it’s being calculated on different data. We shouldn’t be concerned if the absolute validation loss is higher in mid-training or excited if it’s lower.</p>
+    <h2>“ChatCORE” evaluation</h2>
+    <p>In <a href="chapter-18.html" class="xref">chapter 18</a>, I described the CORE metric and how it’s this single number boiled down from 90,000+ questions that tells us if the model is actually getting smart. For mid-training and the final two upcoming training phases, we’re trying to get the model to be a competent assistant. We’ll want to hit it with a battery of assistant-like tasks, score each as right or wrong, and boil all of that down into a number. Karpathy calls this ChatCORE.</p>
+    <p>In total we’ll evaluate the model on 19,329 conversations from six different datasets. You’ve seen all but one before. Some were used in training, but of course none of the specific conversations we’ll be using for evaluation were allowed into the training data.</p>
+    <p>Let’s start with the ARC Easy and ARC Challenge datasets. Recall from <a href="chapter-18.html" class="xref">chapter 18</a> that these are multiple choice questions from grade 3–9 science tests. We used these as part of our CORE metric. The difference is that now we’ll pose them as if a user is asking. Here’s an example from one of the 1000+ questions in ARC Challenge:</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong>Multiple Choice question: Which method is the safest way to watch an eclipse of the Sun?</p>
+      <p>- Turn away after two or three minutes.=A</p>
+      <p>- Look at the Sun through a long telescope.=B</p>
+      <p>- Cast an image through a pinhole onto a screen.=C</p>
+      <p>- Blink often until your eyes get used to the light.=D</p>
+      <p>Respond only with the letter of the correct answer.<strong>&lt;|user_end|&gt;&lt;|assistant_start|&gt;</strong></p>
+    </div>
+    <p>If the model generates “C” in response to the prompt we’ll score the question as correct. If this were a much, much smarter model, then any other response could be a sign of malicious intent towards humans, but for our model it will just mean it got the wrong answer. (I simplified a little. To make things fair given that we’ll be centering the score at 25%, regardless of the exact output of the model, we’ll pick whichever token A, B, C, or D has the highest probability.)</p>
+    <p>We’ll also be using the MMLU, GSM8K, SpellingBee, and HumanEval datasets. We looked at MMLU above. I’ll be discussing SpellingBee in <a href="chapter-26.html" class="xref">chapter 26</a> and GSM8K at length in <a href="chapter-28.html" class="xref">chapter 28</a>. I do want to show an example from the oddly named HumanEval dataset.</p>
+    <p>Modern models from OpenAI, Anthropic, Google, and others are wizards at writing computer code. As a result, the whole field of software engineering is now evolving faster than ever before. I remain in awe of the fact that models can translate human languages and that they can write computer code and I’m not sure which one deserves more awe. Coding requires thinking at many levels and translating those thoughts into a precise syntax that the computer can execute. It’s shocking that you can now express an idea in a human language and a model will turn that into code.</p>
+    <p>Using models to write code has been adopted so widely and quickly that it’s easy to forget how new it is. In early 2023, engineers as a whole <em>discovered</em> that ChatGPT could code. The first thing I tried was asking ChatGPT to create a web-based quiz to learn to recognize musical intervals. I recorded my entire session in a blog post and will include a link in the further reading section. Almost two years earlier, in July 2021, OpenAI published a paper titled “Evaluating Large Language Models Trained on Code” on their work teaching a model to code. Several of the co-authors on the paper are among the best known names in AI today.</p>
+    <p>The OpenAI team had scraped so much of the code on the internet to train their model that they had to be extremely careful in evaluating it. They needed to measure its fundamental ability to turn English into code and not be fooled by it retrieving memorized code snippets. So they carefully and manually crafted 164 coding problems and assembled them into the HumanEval dataset. This seems like an odd name for a dataset designed to test a model’s ability to write code unless you know the background—this was their gold standard human-created test. Here’s an example:</p>
+    <div class="inset">
+      <p><strong>&lt;|user_start|&gt;</strong></p>
+      <p>def int_to_mini_roman(number):</p>
+      <p>    &quot;&quot;&quot;</p>
+      <p>    Given a positive integer, obtain its roman numeral equivalent as a string,</p>
+      <p>    and return it in lowercase.</p>
+      <p>    Restrictions: 1 &lt;= num &lt;= 1000</p>
+      <p>    Examples:</p>
+      <p>    &gt;&gt;&gt; int_to_mini_roman(19) == &#x27;xix&#x27;</p>
+      <p>    &gt;&gt;&gt; int_to_mini_roman(152) == &#x27;clii&#x27;</p>
+      <p>    &gt;&gt;&gt; int_to_mini_roman(426) == &#x27;cdxxvi&#x27;</p>
+      <p>    &quot;&quot;&quot;</p>
+      <p><strong>&lt;|user_end|&gt;&lt;|assistant_start|&gt;</strong></p>
+    </div>
+    <p>If you’ve used the Python programming language this may look familiar and if not it will look odd. The user is saying—I’m writing code to turn integers between 1 and 1000 into Roman numerals and here are examples of how it should work. This is pretty much standard documentation. In the old days the human would also implement the function, meaning write the code to actually turn numbers into Roman numerals. Here the idea is that the assistant (the model) will write the function.</p>
+    <p>There are many ways to write code to achieve the same goal. For this reason we won’t try to match the output of the model to a specific solution. Instead we’ll automatically try a bunch of test cases that come with the HumanEval dataset. If they all pass we’ll score the conversation as correct overall. As an example, here are some of the checks for the conversation above:</p>
+    <figure id="fig-25-2" style="max-width:60%">
+      <input type="checkbox" id="lb-322" class="lightbox-toggle">
+      <label for="lb-322"><img src="images/RC273.png" alt="" loading="lazy"></label>
+      <label for="lb-322" class="lightbox-overlay"><img src="images/RC273.png" alt=""></label>
+      <figcaption>Figure 25.2. Example of checks performed to see if the model coded a HumanEval question correctly. “Candidate” is the function written by the model. “Assert” means to check that a statement is true.</figcaption>
+    </figure>
+    <hr class="section-break">
+    <p>Here are all the tasks in ChatCORE and the number of conversations in each:</p>
+    <figure id="tbl-25-2" style="max-width:60%">
+      <input type="checkbox" id="lb-323" class="lightbox-toggle">
+      <label for="lb-323"><img src="images/RC274.png" alt="" loading="lazy"></label>
+      <label for="lb-323" class="lightbox-overlay"><img src="images/RC274.png" alt=""></label>
+      <figcaption>Table 25.2. All the tasks in our ChatCORE evaluation.</figcaption>
+    </figure>
+    <p>As with the CORE metric, we count the percent right for each task type, center the percentages by comparing with how random guessing would score, and then average all of those scores. This gives us a single overall score between 0 and 1. If our model produces random “garbage” we should score 0 and if the assistant answers every question correctly we should score 1.</p>
+    <h2>Let’s train</h2>
+    <p>I’m ready to kick off the training. How long do we need? For base training we were well above 300,000 tokens per second and the mechanics of training are the same here—form batches of 524,288 tokens, calculate loss the same way, and update parameters the same way. All the mid-training conversations put together constitute around 425 million tokens, so it should take less than half an hour. Or as another back of the envelope calculation—base training took a little under an hour per billion tokens and here we have under half a billion tokens.</p>
+    <p>…and done! The training took 22 minutes. Running the ChatCORE evaluation took just under 10 minutes. In theory I spent $12.70 but in reality it was more because I hit a few bumps in the beginning and it took more time than I expected for the training to start.</p>
+    <p>Here’s the plot of validation loss. We trained for 810 steps and measured validation loss seven times: at the start, at steps 150, 300, 450, 600, and 750, and at the end.</p>
+    <figure id="fig-25-3" style="max-width:90%">
+      <input type="checkbox" id="lb-324" class="lightbox-toggle">
+      <label for="lb-324"><img src="images/RC329.png" alt="" loading="lazy"></label>
+      <label for="lb-324" class="lightbox-overlay"><img src="images/RC329.png" alt=""></label>
+      <figcaption>Figure 25.3. Validation loss over all of mid-training.</figcaption>
+    </figure>
+    <p>Looks good. I don’t need to zoom in to confirm that it declined each time.</p>
+    <p>And, as with base training, once we got going, we maintained near full use of the eight GPUs. Here’s utilization:</p>
+    <figure id="fig-25-4" style="max-width:90%">
+      <input type="checkbox" id="lb-325" class="lightbox-toggle">
+      <label for="lb-325"><img src="images/RC330.png" alt="" loading="lazy"></label>
+      <label for="lb-325" class="lightbox-overlay"><img src="images/RC330.png" alt=""></label>
+      <figcaption>Figure 25.4. GPU utilization. I’m not sure why it took several minutes for the training to actually start.</figcaption>
+    </figure>
+    <p>And here’s memory:</p>
+    <figure id="fig-25-5" style="max-width:90%">
+      <input type="checkbox" id="lb-326" class="lightbox-toggle">
+      <label for="lb-326"><img src="images/RC331.png" alt="" loading="lazy"></label>
+      <label for="lb-326" class="lightbox-overlay"><img src="images/RC331.png" alt=""></label>
+      <figcaption>Figure 25.5. GPU memory allocated over the whole training.</figcaption>
+    </figure>
+    <p>Did we achieve anything useful? Let’s look at our ChatCORE evaluation results.</p>
+    <figure id="tbl-25-3">
+      <input type="checkbox" id="lb-327" class="lightbox-toggle">
+      <label for="lb-327"><img src="images/RC275.png" alt="" loading="lazy"></label>
+      <label for="lb-327" class="lightbox-overlay"><img src="images/RC275.png" alt=""></label>
+      <figcaption>Table 25.3. ChatCORE score after the mid-training phase.</figcaption>
+    </figure>
+    <p>Yes! Something is happening. A raw accuracy of 65% on our friend ARC Easy means we’re feeding a user message into the model with a multiple choice question and the model is predicting the correct letter answer. It’s also nice to see that the model achieves 99% on the spelling bee task. I’ll show the exact test later.</p>
+    <p>The only tasks in common with our CORE evaluation are ARC Easy and ARC Challenge. These are the exact same 2,376 and 1,172 multiple choice questions, but in ChatCORE we’re asking the model to solve them in a new and more challenging way. In CORE, we formed prompts with 10 example questions followed by the actual question followed by one of the choices. We then looked at which prompt had the highest probability and considered this to be the model’s choice. In ChatCORE, we pose a single multiple choice question the same way you might to ChatGPT and look at the model’s next token prediction. So even though I know they aren’t directly comparable, I still want to look:</p>
+    <figure id="tbl-25-4">
+      <input type="checkbox" id="lb-328" class="lightbox-toggle">
+      <label for="lb-328"><img src="images/RC276.png" alt="" loading="lazy"></label>
+      <label for="lb-328" class="lightbox-overlay"><img src="images/RC276.png" alt=""></label>
+      <figcaption>Table 25.4. Comparison of ARC questions between CORE and ChatCORE.</figcaption>
+    </figure>
+    <p>I’m not sure what to make of the comparison other than a bit of surprise that they are both still in the same ballpark. I believe or at least hope this is a sign that our model is robust and adaptable. If we were working with a traditional, non-deep, non-GPT model that we had carefully trained to do well on ARC Easy via the CORE way of posing the questions, I suspect it would be nearly useless at answering this conversational (ChatCORE) way.</p>
+    <p>The more important comparisons are to come. We’re soon going to conduct the next two phases of training. These initial ChatCORE results will serve as a baseline so we can assess if our efforts to keep turning our general model into a chat model are effective.</p>
+    <p>However, before we move on, I’m again itching to try the model. I’m going to take the same ARC Easy question I randomly selected above in <a href="chapter-24.html" class="xref">chapter 24</a> and put it into the form of a conversation, exactly like we did during mid-training, except I’ll leave off the assistant response.</p>
+    <div class="inset">
+      <p><strong>&lt;|bos|&gt;&lt;|user_start|&gt;</strong>Multiple Choice question: What is the primary source of stored thermal energy in oceans?</p>
+      <p>- sunlight=A</p>
+      <p>- plankton=B</p>
+      <p>- volcanoes=C</p>
+      <p>- hurricanes=D</p>
+      <p>Respond only with the letter of the correct answer.<strong>&lt;|user_end|&gt;&lt;|assistant_start|&gt;</strong></p>
+    </div>
+    <p>This prompt ends with &lt;|assistant_start|&gt;. The model generates:</p>
+    <div class="inset">
+      <p>A<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>And yes, A is correct!</p>
+    <p>I also want to try a conversation that is not multiple choice and does not come from ARC. Here’s my prompt:</p>
+    <div class="inset">
+      <p><strong>&lt;|bos|&gt;&lt;|user_start|&gt;</strong>What is the capital of France?<strong>&lt;|user_end|&gt;&lt;|assistant_start|&gt;</strong></p>
+    </div>
+    <p>And here’s what the model generates:</p>
+    <div class="inset">
+      <p>The capital of France is Paris. Paris is a city located in the northern part of the country, on the Seine River. It is known for its historical landmarks, cultural institutions, and the famous Louvre Museum, which houses the Mona Lisa. Paris is also home to many famous neighborhoods, such as Montmartre, Le Marais, and Saint-Germain-des-Prés.<strong>&lt;|assistant_end|&gt;</strong></p>
+    </div>
+    <p>After base training the model knew nothing about these special user and assistant tokens. Clearly it learned something during mid-training! It has become capable of conversing with us.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-24.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-26.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 12: Image recognition and ResNet &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-11.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-13.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">12</p>
+      <hr class="chapter-rule">
+      <h1>Image recognition and ResNet</h1>
+    </div>
+    <p>What is this?</p>
+    <figure id="fig-12-1" style="max-width:90%">
+      <input type="checkbox" id="lb-147" class="lightbox-toggle">
+      <label for="lb-147"><img src="images/RC130.jpg" alt="" loading="lazy"></label>
+      <label for="lb-147" class="lightbox-overlay"><img src="images/RC130.jpg" alt=""></label>
+      <figcaption>Figure 12.1. A photo from ImageNet. What is it?</figcaption>
+    </figure>
+    <p>If you know your animals, which I don’t, you probably will recognize a sea otter. If you’re not sure you can paste it into ChatGPT or similar, as I just did, and it will helpfully tell you: “It’s a sea otter floating on its back in the water. The pose—lying belly-up with paws held to the chest—is very characteristic of sea otters. They often rest, eat, or groom themselves in this position.”</p>
+    <p>Fifteen years ago computers could barely recognize images. The idea that they would soon surpass humans at picking out objects, animals, plants, and people from photographs and correctly labeling them was unimaginable even to most computer vision researchers. There seemed to be something so uniquely animal about how our brains process what comes into our eyes and form meaning. It certainly didn’t seem possible to replicate it through deliberate, hand-coded computer logic—if it’s red and fits into a hexagon then it’s a stop sign; if it’s tall and brown and green then it’s a tree. And none of the statistical, machine-learning techniques seemed promising enough to think they could ever excel in the situation where humans do: here’s a random, messy photo from the real world, what’s in it?</p>
+    <p>Two techniques have proven crucial to moving the ball forward in AI: public data and contests. Imagine you have an idea for an algorithm to translate from English to German or to convert speech to text or to label objects in photos. Imagine, also, that you need data to train and test your algorithm. If you and every other researcher in the same boat needs to start by collecting your own data, this will set you back years, and more than likely you won’t even start. Sure, finding and labeling 1000 photos sounds tedious, but you could commit yourself, enlist your significant other to double check your labels, and finish in a weekend. But what if you suspect your algorithm will only show promise when trained on 100,000 photos, and you’re really not sure if it will work at all. Will you be able to marshal the resources and funding to label 100,000 photos?</p>
+    <p>But what if someone else had already done all the hard work? Then you might download the data and get started right away. Now you’re off building your algorithm and experimenting. It’s a Friday, you run an experiment, and correctly label 0.5% of the photos. That might not sound impressive, but you know it’s much better than your control. Your control here might be to guess the most common label and this yields an accuracy of 0.1%. Happy with your progress, you put your work aside and relax for the weekend.</p>
+    <p>Except there’s a contest! And submissions are due in two months. You know that all your competitors also have access to the same data. And after submission, all of the algorithms will be run, and only one will get the highest accuracy and score top place, and that could be you. So you don’t go off and relax. You burn the midnight oil.</p>
+    <p>The most famous open dataset of this type is ImageNet. The project was the brainchild of Fei-Fei Li who was a professor of computer science at Princeton when they started collecting images and Stanford by the time the dataset was released. The initial release, in 2009, contained 3.2 million labeled images within the categories of mammals, birds, fish, reptiles, amphibians, vehicles, furniture, musical instruments, geological formations, tools, flowers, and fruits.</p>
+    <p><a href="#fig-12-1" class="xref" data-preview="images/RC130.jpg">Figure 12.1</a> is a mammal from the ImageNet category n02445394 (sea otter, Enhydra lutris), part of the category n02441326 (musteline mammal, mustelid, musteline), which is in turn part of the category n02075296 (carnivore), which is part of n01886756 (placental, placental mammal, eutherian, eutherian mammal), which lives within the category n01861778 (mammal, mammalian). If the main thing on your mind was an algorithm to recognize images, would you have had the patience and grit to categorize millions of images like that?</p>
+    <p>Around 2010 I worked on software for event adjudication. When people enrolled in clinical trials experience medical events (e.g. a heart attack), two physician scientists in a central location remote from where the patient was treated, who have no knowledge of if the patient is on placebo or drug, independently read the medical records collected during the event. Their goal is to attach a consistent and trustworthy label to what happened—a nonfatal heart attack, a stroke, heart failure. Without comparing notes, they input their labels into the software. If the assessments conflict then the case may be presented to a third doctor or brought to a live discussion.</p>
+    <p>The ImageNet team needed to do something similar but at a much larger scale, albeit with much smaller consequences for mistakes. They automatically searched for images using the labels in their hierarchy (e.g. sea otter, catamaran) and used Amazon Mechanical Turk to ask humans to agree or disagree that the specified object was somewhere in the photo. If enough people agreed, the label was considered valid. You can imagine that it’s relatively easy to achieve agreement that a photo contains a generic cat. It’s much harder for multiple people to agree it’s a specific breed of cat. The ImageNet labeling methodology took this and similar issues into account.</p>
+    <p>Fast forward to September 30, 2012. This was the submission deadline for the third year of the Large Scale Visual Recognition Challenge competition, created by many of the same researchers who created ImageNet, and using images and labels from ImageNet. Contestants that year were provided with 1000 object categories, for example: gazelle, barber chair, anteater, parking meter, and combination lock. The test set consisted of 100,000 unlabeled photos.</p>
+    <p>The classification part of the contest was judged by error rate. Each competing algorithm could output up to five labels for each test image, necessary because each image had a single correct label even though it might contain multiple objects. (For example, a photo could contain a pineapple and a pizza, both of which were categories in the 2012 competition.) The winning team had an error rate of 15.3%. They correctly classified 84,685 images. The next best team had an error rate 26.2%, and to give a sense of how huge a gulf there was between first and second place, the third team’s score was 27.0%.</p>
+    <p>So which team won? They called themselves SuperVision. And if you know the names of any AI researchers, it’s probably the three people on the team: Alex Krizhevsky, Ilya Sutskever, and Geoffrey Hinton. Hinton won the 2024 Nobel Prize in physics for “foundational discoveries and inventions that enable machine learning with artificial neural networks.&quot;</p>
+    <p>To exaggerate a little, before SuperVision and their winning AlexNet model, if an AI researcher knew about GPUs and NVIDIA, it was because they were a gamer; and they likely believed that deep neural networks were impractical, impossible, limited, or not relevant to their subfield within AI. This all changed. Overnight researchers realized that deep neural networks with tens of millions of parameters could be trained. Not only that, there was undeniable proof they could blow the socks off other approaches, at least in computer vision.</p>
+    <p>Now let’s jump to 2015. The algorithm that blew away the competition this year was created by Kaiming He, Xiangyu Zhang, Shaoqing Ren, and Jian Sun from Microsoft Research. They had made a fascinating observation. By 2015 there was lots of evidence that very deep networks could beat all other approaches for human-like tasks, especially for visual tasks like object recognition. I won’t get into the architecture of vision models, but a quick intuition is that more layers means more ability to pick up patterns figured out by earlier layers and in turn turn those patterns into meaning.</p>
+    <p>In the few years prior, researchers had encountered and overcome issues with training deep networks. For example, through many layers, the gradient would either vanish or explode as numbers became too small or too big through successive calculations (see backpropagation in <a href="chapter-4.html" class="xref">chapter 4</a>; see examples of exploding gradients in chapters 19 and 21). These problems were fixed through a variety of techniques such as clever and careful initialization of parameters and searching for appropriate learning rates. </p>
+    <p>Now that researchers could train networks with tens of layers, they began to see that up to a certain number of layers made things better, but above this level things got worse. You might think—well, that makes sense, there’s an ideal number of layers to “understand” a given problem and beyond that the extra layers will confuse things and cause harm. What the Microsoft team realized is that this argument is invalid. If you can achieve a certain loss with 20 layers, there must be a model with 21 layers that achieves at least the same loss: take the 20-layer model and add one more layer that does nothing but copy its input to its output. The overall loss for the 21-layer model would then be identical to the 20-layer model. That the training process was not automatically finding this solution (or a better one) told the team that models were hitting a training limitation, not bumping up against some fundamental maximum number of useful layers.</p>
+    <p>Motivated, the team came up with an ingenious idea, which I’ll show in an example diagram first:</p>
+    <figure id="fig-12-2">
+      <input type="checkbox" id="lb-148" class="lightbox-toggle">
+      <label for="lb-148"><img src="images/RC131.png" alt="" loading="lazy"></label>
+      <label for="lb-148" class="lightbox-overlay"><img src="images/RC131.png" alt=""></label>
+      <figcaption>Figure 12.2. A model with skip connections, also known as residual connections.</figcaption>
+    </figure>
+    <p>You saw linear and ReLU modules working together starting in hedgehog model #4 (see <a href="chapter-10.html#fig-10-18" class="xref" data-preview="images/RC107.png">figure 10.18</a>). What’s new here are the two <strong>skip connections</strong>. The output of the first linear / ReLU / linear sublayer gets added to the input and fed into the second linear / ReLU / linear sublayer, where the same thing happens again. By “added,” I’m not referring to anything abstract. It’s literally an element-wise addition.</p>
+    <p>I’ll add numbers to the diagram to make this concrete. Let’s say our input is the height and length of an adult turkey. Our aim is for the model to predict the average height and length of the turkey’s children once they themselves reach adulthood (apparently this takes around four months). We haven’t started training yet, but assume the initial weights and biases in the linear layers are small.</p>
+    <figure id="fig-12-3">
+      <input type="checkbox" id="lb-149" class="lightbox-toggle">
+      <label for="lb-149"><img src="images/RC132.png" alt="" loading="lazy"></label>
+      <label for="lb-149" class="lightbox-overlay"><img src="images/RC132.png" alt=""></label>
+      <figcaption>Figure 12.3. Real numbers flowing through a model with skip connections. The input to the second sublayer of (1.1, 2.1) is the overall input (1.0, 2.0) plus the output of the first sublayer (0.1, 0.1).</figcaption>
+    </figure>
+    <p>It’s incredible and probably not intuitive that this enhancement, one that adds no extra parameters and a negligible amount of extra computation, is one of the most important techniques in deep learning. With it, it’s possible to train models with dozens or hundreds of layers, and even smaller models (fewer layers, fewer parameters) train better and faster.</p>
+    <p>The point of a deep network is to perform a complicated function. Not like predicting the height and length of turkey offspring. Rather, something so complicated that historically we would have thought of it not as a math or computer function but as a human or animal skill. You can think of the function that takes tens of thousands of red/green/blue pixel values organized in a rectangle and outputs labels and bounding boxes for the objects present. That’s called seeing. Or you can think of the input as a paragraph of text posing a question and the output as the answer. That’s called reading comprehension or understanding language.</p>
+    <p>Imagine you’ve designed an architecture that you think could compute some complicated function like the ones I just mentioned. You have many layers and believe various layers will learn various parts of the computation. Let’s say all together there are half a billion parameters to learn, the same number as in the 20-layer transformer model I trained.</p>
+    <p>As you know by now, this big thing really will be some huge mathematical function where input numbers come in, get multiplied by parameters, added, and so on. Common sense tells you that before you train, this overall function is going to be ridiculously far from doing anything useful. How could it not? You’re just taking your input and doing various operations with half a billion random numbers. You will never get lucky the way my daughter did when she picked our two reasonable starting parameters for the turkey model in <a href="chapter-3.html" class="xref">chapter 3</a>.</p>
+    <p>You’re not too worried, though, because the starting parameters shouldn’t matter <em>that</em> much. You’re going to feed training data, compute loss, which sure, will initially be atrocious, and wait for backprop to work its magic. However, the point that Kaiming He and team realized is that at some point the search space is just too large. No matter how many tricks you use to keep the numbers under control (more about that later) so gradients don’t vanish or explode, training will get stuck in local minima.</p>
+    <p>The beautiful thing about adding the skip connections, as shown in the diagram above, is that if the weights in the sublayer are initialized correctly, then, taking into account the skip connection causing the input to get added back in at the end, the sublayer starts out not too far away from copying the input to the output. (This is called the <strong>identity</strong> function.) Even though you of course didn’t build this whole model to copy input to output, this is likely to be far, far closer to the eventual function you want the model to learn than anything else you might initialize the model with.</p>
+    <p>Let me stay on this point for a second. In <a href="#fig-12-3" class="xref" data-preview="images/RC132.png">figure 12.3</a> I made up the idea of predicting turkey children height and length to show how the addition works. They say the apple doesn’t fall far from the tree. Predicting that the children will have the same height and length as the parent seems like a better starting point than random. And even though I initialized the weights in the linear layers to (smallish) random numbers, because of the skip connections, the final output is not far from the input, and it will be trivial for training to adjust the linear layer weights to model the true relationship.</p>
+    <p>Now you say—okay, fine for turkey children, but why would I think copying the input to the output would be a good starting point for our transformer model? Let me put it this way. You have an embedding of size 1280 that for the sake of this argument you can assume represents a token in a meaningful way as described in <a href="chapter-11.html" class="xref">chapter 11</a>. Your goal is to predict the next token. The only thing you get is a single linear layer like the final green box shown in <a href="chapter-11.html#fig-11-10" class="xref" data-preview="images/RC129.png">figure 11.10</a>. Forget about the rest of the transformer. Would you rather start with the embedding as input or a random scrambling of the embedding? I would take the first every time.</p>
+    <p>Now let’s turn to training a model with skip connections. Each sublayer (between skip connections), under the pressure of backpropagation, will optimize to output whatever needs to be added to its input. This allows each sublayer to move away from a near identity function in a controlled fashion.</p>
+    <p>The reason these connections are also called <strong>residual connections</strong>, and that the 2015 winning model from the Microsoft researchers was called ResNet, is that each sublayer only needs to learn whatever is not already predicted by the layer behind it. In other words it needs to learn the <em>residual,</em> the part left over after the main part is explained.</p>
+    <p>Even though it’s probably overkill or at least an odd modeling choice for the hedgehog quill predictions, I created a deep model using skip connections:</p>
+    <figure id="fig-12-4">
+      <input type="checkbox" id="lb-150" class="lightbox-toggle">
+      <label for="lb-150"><img src="images/RC133.png" alt="" loading="lazy"></label>
+      <label for="lb-150" class="lightbox-overlay"><img src="images/RC133.png" alt=""></label>
+      <figcaption>Figure 12.4. Hedgehog model #7. Uses skip connections.</figcaption>
+    </figure>
+    <p>This model #7 was fast and easy to train. It also has far fewer parameters than hedgehog model #6 (see <a href="chapter-10.html#fig-10-22" class="xref" data-preview="images/RC113.png">figure 10.22</a>). Hedgehog model #6 had 100 × 100 = 10,000 parameters in the middle linear layer alone. This model #7 has 8 parameters (2 × 2 + 2 × 2) in each repeating sublayer plus 2 in each of the first and final linear layers for a total of 20 × 8 + 2 + 2 = 164 parameters. Here’s the loss:</p>
+    <figure id="tbl-12-1">
+      <input type="checkbox" id="lb-151" class="lightbox-toggle">
+      <label for="lb-151"><img src="images/RC134.png" alt="" loading="lazy"></label>
+      <label for="lb-151" class="lightbox-overlay"><img src="images/RC134.png" alt=""></label>
+      <figcaption>Table 12.1. Our new hedgehog model #7 with skip connections.</figcaption>
+    </figure>
+    <p>Here’s the plot:</p>
+    <figure id="fig-12-5">
+      <input type="checkbox" id="lb-152" class="lightbox-toggle">
+      <label for="lb-152"><img src="images/RC135.png" alt="" loading="lazy"></label>
+      <label for="lb-152" class="lightbox-overlay"><img src="images/RC135.png" alt=""></label>
+      <figcaption>Figure 12.5. Hedgehog model #7.</figcaption>
+    </figure>
+    <p>I plotted the model during training after the 0th step and then every 3,000 steps up to step 12,000.</p>
+    <figure id="fig-12-6">
+      <input type="checkbox" id="lb-153" class="lightbox-toggle">
+      <label for="lb-153"><img src="images/RC136.png" alt="" loading="lazy"></label>
+      <label for="lb-153" class="lightbox-overlay"><img src="images/RC136.png" alt=""></label>
+      <figcaption>Figure 12.6. Hedgehog model #7 during training.</figcaption>
+    </figure>
+    <p>The training appears under control as the model learns the patterns in the data. When I pop open the training hood, I can see that the gradients are behaving nicely. During backprop, a gradient will be computed for all of the parameters of all of the layers. I recorded the sum of the absolute values of the gradients of the two weights in the first layer, the two weights in the last layer, and the four weights in two of the sublayers at every step of training. Here are those sums smoothed and plotted:</p>
+    <figure id="fig-12-7">
+      <input type="checkbox" id="lb-154" class="lightbox-toggle">
+      <label for="lb-154"><img src="images/RC137.png" alt="" loading="lazy"></label>
+      <label for="lb-154" class="lightbox-overlay"><img src="images/RC137.png" alt=""></label>
+      <figcaption>Figure 12.7. Sums of the absolute values of the gradients at select layers during the training of hedgehog model #7.</figcaption>
+    </figure>
+    <p>The numbers never get too small or too big. The sums increase in the beginning as the training explores and decrease later as the weights get closer to optimal. By contrast, here’s what happens when I remove the skip connections from the model.</p>
+    <figure id="fig-12-8">
+      <input type="checkbox" id="lb-155" class="lightbox-toggle">
+      <label for="lb-155"><img src="images/RC138.png" alt="" loading="lazy"></label>
+      <label for="lb-155" class="lightbox-overlay"><img src="images/RC138.png" alt=""></label>
+      <figcaption>Figure 12.8. An attempt to train a model just like hedgehog model #7 but without skip connections. The training gets stuck.</figcaption>
+    </figure>
+    <p>You can see from both the model plot looking like a horizontal line and the loss not budging from around 1.2 that the training gets stuck. It is unable to learn how to adjust parameters in a meaningful way. Now let’s look at the gradients for the final layer and the last few sublayers over the first 200 training steps:</p>
+    <figure id="fig-12-9">
+      <input type="checkbox" id="lb-156" class="lightbox-toggle">
+      <label for="lb-156"><img src="images/RC139.png" alt="" loading="lazy"></label>
+      <label for="lb-156" class="lightbox-overlay"><img src="images/RC139.png" alt=""></label>
+      <figcaption>Figure 12.9. Sums of the absolute values of the gradients at select layers during the first 200 training steps of our model without skip connections.</figcaption>
+    </figure>
+    <p>The gradient for sublayers 18 and below (not shown) vanish after around 25 steps leaving training with only the five weights in layers 19, 20, and the final layer to adjust. It’s not surprising that the model gets stuck on predicting the mean number of quills, the same as hedgehog model #1. As bad, the training process is very sensitive to the randomly initialized parameters and the gradients can vanish even sooner. For example, just now I changed my random seed and reinitialized my model, and all gradients from the 19th sublayer and below vanished immediately. You can imagine how this happens with ReLU and only two weights in each linear layer, but the same problem occurs in less sudden ways with bigger models.</p>
+    <p>Now you know the mechanics of a skip connection—they add the input to the output—and why they are miracle components for constructing deep models that are trainable. You should now recognize the skip connections in the original transformer shown in <a href="chapter-6.html#fig-6-2" class="xref" data-preview="images/RC051.png">figure 6.2</a>. You’ll also be seeing two skip connections in each transformer block of our GPT model. I hope you’ll now appreciate how critical a role they play even though the actual operation (addition) could not be simpler.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-11.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-13.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

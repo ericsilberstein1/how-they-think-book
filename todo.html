@@ -1,0 +1,114 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>TODO &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="acknowledgements.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <span></span>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <h1>TODO</h1>
+    </div>
+    <p>In no particular order:</p>
+    <ul>
+      <li>Is Muon explained correctly? Unsure about this. </li>
+      <li>Are skip connections explained correctly?</li>
+      <li>More information about the researchers, their environments, the motivations for each innovation</li>
+      <li>Do something interpretability related like PCA of hidden activations, ablation</li>
+      <li>Break up final chapters into training and evaluation parts?</li>
+      <li>Where does the precision chapter belong?</li>
+      <li>Move KV cache chapter back?</li>
+      <li>Check and improve background to backprop like who / how invented.</li>
+      <li>In the attention chapter, explain the connection between dot product and angle?</li>
+      <li>Andy and Ning said rotary embed chapter is confusing.</li>
+      <li>Re rotary embed, check if I’m right about this: As each layer is learning to emit queries and keys from its input, the model figures out that more or less emphasis on certain dimension pairs within a head results in more or less sensitivity to relative position.</li>
+      <li>Also re rotary embed, show the exact calculation? Maybe in a table?</li>
+      <li>When I mention MLP or somewhere give more background on where the term comes from? Is it a big gap to never mention neuron and/or perceptron and/or give a biological intuition?</li>
+      <li>LSAT AR example question I showed has 4 choices but we recenter based on 5 (20%) and digging around looks like “logic games” should have 5 choices. Check if I missed something.</li>
+      <li>Am I explaining Adam correctly? Is signal-to-noise the best way to think about it? Show a graphic with gradient vectors on a surface with and without Adam?</li>
+      <li>Also re Adam, is this true? “It overshoots and then corrects, which may be overkill here but is useful for not getting stuck at less than optimal parameters.”</li>
+      <li>Concluding chapter</li>
+      <li>For examples of right / wrong from CORE, for Partridge Family vs Duel show the probabilities.</li>
+      <li>Is there research showing what gets helped by a model being able to spell?</li>
+      <li>Where did ChatCORE come from? Did Karpathy pick a reasonable mix of tasks or did it come from a paper?</li>
+      <li>Am I right about where the HumanEval name comes from?</li>
+      <li>Clean up all diagrams</li>
+      <li>Mention somewhere the importance of going through training conversations in random order? Mention in passing in SFT but never say why.</li>
+      <li>In checkpoints paragraph or somewhere show examples of publicly available checkpoints?</li>
+      <li>Add photo credits</li>
+      <li>Add rest of further reading and resources</li>
+      <li>Change x to weight in first backprop example?</li>
+      <li>Any point in mentioning AdamW?</li>
+      <li>From feedback – explain why phases of training after base don’t overwrite or lose too much of the learning from base.</li>
+      <li>From feedback - Like absolute value it will take negative numbers and make them positive and it also has two other advantages which aren’t that important right now. ← implies will address later but never do</li>
+    </ul>
+  </article>
+  <nav class="chapter-nav">
+    <a href="acknowledgements.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <span></span>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

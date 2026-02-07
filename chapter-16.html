@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 16: The whole model &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-15.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-17.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">16</p>
+      <hr class="chapter-rule">
+      <h1>The whole model</h1>
+    </div>
+    <p>Here are all the diagrams we walked through in chapters 11, 13, 14, and 15, all in one place.</p>
+    <figure id="fig-16-1">
+      <input type="checkbox" id="lb-201" class="lightbox-toggle">
+      <label for="lb-201"><img src="images/RC184.png" alt="" loading="lazy"></label>
+      <label for="lb-201" class="lightbox-overlay"><img src="images/RC184.png" alt=""></label>
+      <figcaption>Figure 16.1. The full model.</figcaption>
+    </figure>
+    <p>A good exercise that will help me and you wrap our heads around the whole model is to count the learned parameters. We’ll do it for my 20-layer model, which has a vocab size of 65,536, an embedding size of 1280, and 20 transformer blocks (i.e., V = 65,536, D = 1280, depth = 20). I suggest you try counting the learned parameters yourself before reading on. You’ll know you’re on the right track if the total is around half a billion. One other piece of information you’ll need that I may not have been explicit about is that there are no biases in any of the linear transformations in our model.</p>
+    <p>Okay, here goes! A batch of sequences of tokens enters the embed module. The embed module goes from token ID to an embedding of size 1280. There are a total of V unique tokens. This mean the embed module needs to learn a total of V × D parameters, so 65,536 × 1280 = <strong>83,886,080</strong>. We’re well on our way to half a billion.</p>
+    <p>Now we go into the transformer block. Norm has no parameters. (There are other norming techniques that do involve learned parameters. Here, though, there are none. I’ll walk you through the exact calculation in <a href="chapter-22.html" class="xref">chapter 22</a>.)</p>
+    <p>In causal self attention, we do the Q, K, and V linear transformations. Each transformation goes from a vector of size 1280 to a vector of size 1280, so that’s 1280 × 1280 = 1,638,400. We have three of these and 3 × 1,638,400 = <strong>4,915,200</strong>. Splitting into heads involves no learned parameters, in fact, it’s not even an operation as much as just a shift in how we index into our tensors. Rotary embed is sophisticated and beautiful but also involves no learned parameters. The same is true of scaled dot product attention. It’s the heart of how the transformer works, but it itself has no parameters, the relevant learning takes place before and after. Rejoin heads also has no parameters. The linear transformation at the end of casual self attention is again from size 1280 to size 1280 so that’s another <strong>1,638,400</strong> parameters.</p>
+    <p>We’re up to the MLP in the transformer block. This is our classic sandwich of a linear transformation followed by ReLU (squared in this case) followed by a linear transformation. The first linear transformation goes from size 1280 to size 4 × 1280. The second goes from size 4 × 1280 back to size 1280. ReLU has no learned parameters. So that’s 1280 × 4 × 1280 + 4 × 1280 × 1280 = <strong>13,107,200</strong>. As mentioned in <a href="chapter-13.html" class="xref">chapter 13</a>, a lot of learning is happening here!</p>
+    <p>We’re now done counting the parameters in the first transformer block. That was 4,915,200 + 1,638,400 + 13,107,200 = 19,660,800. And remember we have 20 of them. 20 × 19,660,800 = <strong>393,216,000</strong>.</p>
+    <p>And we have one last and critical linear transformation. The output of our final transformer block is of size 1280 and we project this to a distribution over our entire vocabulary. So that’s 1280 × 65,536 = <strong>83,886,080</strong>.</p>
+    <p>So the overall total: 83,886,080 + 393,216,000 + 83,886,080 = <strong>560,988,160</strong>.</p>
+    <p>I want to double check the number with the model in code. With PyTorch that’s done as follows:</p>
+    <figure id="fig-16-2" style="max-width:70%">
+      <input type="checkbox" id="lb-202" class="lightbox-toggle">
+      <label for="lb-202"><img src="images/RC185.png" alt="" loading="lazy"></label>
+      <label for="lb-202" class="lightbox-overlay"><img src="images/RC185.png" alt=""></label>
+      <figcaption>Figure 16.2. Counting the number of model parameters using code.</figcaption>
+    </figure>
+    <p>It matches!</p>
+    <p>Another useful way to reinforce things is to think through the dimensions of the tensors that go in and out of every box. I encourage you to try this before reading ahead. You can copy <a href="#fig-16-1" class="xref" data-preview="images/RC184.png">figure 16.1</a> and scribble on top of it. You can either use the capital letters like B for batch, V for vocab size or use example numbers.</p>
+    <p>I’m going to use example numbers. I’ll use my 20-layer model (V = 65,536, D = 1280) and the actual batch size (B = 32), sequence length (T= 2048), and number of heads (10) from when I trained it ahead of writing this book. This means my overall starting input is a batch of 32 sequences of 2048 tokens each organized in a tensor of size 32×2048 corresponding to about 200 pages of text (see <a href="chapter-8.html#tbl-8-4" class="xref" data-preview="images/RC078.png">table 8.4</a>).</p>
+    <p>One more word of encouragement to try this on your own first. It won’t be an easy exercise. But if you struggle through, referring back to earlier chapters as needed, I guarantee you&#x27;ll develop a stronger intuition, even if you have to give up on some of the especially tricky areas like scaled dot product attention.</p>
+    <p>Let’s start with the top level.</p>
+    <figure id="fig-16-3">
+      <input type="checkbox" id="lb-203" class="lightbox-toggle">
+      <label for="lb-203"><img src="images/RC186.png" alt="" loading="lazy"></label>
+      <label for="lb-203" class="lightbox-overlay"><img src="images/RC186.png" alt=""></label>
+      <figcaption>Figure 16.3. The size of the tensors going in and out of every module at the top level of the model.</figcaption>
+    </figure>
+    <p>Next the transformer block:</p>
+    <figure id="fig-16-4">
+      <input type="checkbox" id="lb-204" class="lightbox-toggle">
+      <label for="lb-204"><img src="images/RC187.png" alt="" loading="lazy"></label>
+      <label for="lb-204" class="lightbox-overlay"><img src="images/RC187.png" alt=""></label>
+      <figcaption>Figure 16.4. The tensors going in and out of every module within the transformer block.</figcaption>
+    </figure>
+    <p>Now causal self attention. This gets tricky because we split the tensors into heads.</p>
+    <figure id="fig-16-5">
+      <input type="checkbox" id="lb-205" class="lightbox-toggle">
+      <label for="lb-205"><img src="images/RC188.png" alt="" loading="lazy"></label>
+      <label for="lb-205" class="lightbox-overlay"><img src="images/RC188.png" alt=""></label>
+      <figcaption>Figure 16.5. The tensors going in and out of every module within the causal self attention module.</figcaption>
+    </figure>
+    <p>(* To keep my diagrams consistent with the code I show I show the output of “split into heads” as  32×2048×10×128. However, before we go into scaled dot product attention, we need to swap the two middle dimensions to get to 32×10×2048×128 for q, k, and v. You’ll see this is the shape I show as the input in <a href="#fig-16-6" class="xref" data-preview="images/RC189.png">figure 16.6</a> below. The convention is that operations are performed on the deepest dimension or dimensions. Scaled dot product attention performs operations at the level of the “2048” dimension and the “128” dimension. The operations are identical across the “8” and “10” dimension. This is why we need to swap the “10” dimension and the “2048” dimension.)</p>
+    <p>Here’s scaled dot product attention. This is where it gets really confusing.</p>
+    <figure id="fig-16-6">
+      <input type="checkbox" id="lb-206" class="lightbox-toggle">
+      <label for="lb-206"><img src="images/RC189.png" alt="" loading="lazy"></label>
+      <label for="lb-206" class="lightbox-overlay"><img src="images/RC189.png" alt=""></label>
+      <figcaption>Figure 16.6. Shape of the tensors flowing through scaled dot product attention.</figcaption>
+    </figure>
+    <p>In scaled dot product attention we need to compute a score between every query and every key. You’ll see that we transpose the keys as discussed in <a href="chapter-14.html" class="xref">chapter 14</a>. Now that you can see the full shape of the input tensors you can see that the transpose applies to the two deepest dimensions.</p>
+    <p>And finally, the MLP:</p>
+    <figure id="fig-16-7">
+      <input type="checkbox" id="lb-207" class="lightbox-toggle">
+      <label for="lb-207"><img src="images/RC190.png" alt="" loading="lazy"></label>
+      <label for="lb-207" class="lightbox-overlay"><img src="images/RC190.png" alt=""></label>
+      <figcaption>Figure 16.7. Shape of tensors flowing through the MLP.</figcaption>
+    </figure>
+    <p>Now you know what’s in the model (<a href="chapter-11.html" class="xref">chapter 11</a> through this chapter), and you know how to calculate loss (<a href="chapter-8.html" class="xref">chapter 8</a>). So is that it? Are we done? No. Now for the fun and frustrating part. We have to train this thing, and we need to learn how to get from a no-longer-black-box that adds tokens to a sequence of text to something that behaves like an assistant, chats with us, and is capable of using tools.</p>
+    <p>Here’s the agenda. Over the next few chapters I’ll cover concepts we’ll need during training such as evaluating if the model is becoming smart and how we will actually update parameters. Then in <a href="chapter-24.html" class="xref">chapter 24</a> we’ll start training. First we’ll do base training and then we’ll refine our GPT model into a chat model. </p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-15.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-17.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

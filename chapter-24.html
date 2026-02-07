@@ -1,0 +1,409 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 24: Time to train! Base training. &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-23.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-25.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">24</p>
+      <hr class="chapter-rule">
+      <h1>Time to train! Base training.</h1>
+    </div>
+    <p>We’ve learned about the CORE metric, optimizers, and multiple GPUs. Now we’re ready to train our 32-layer model. First up is <em>base training</em>. Before we start the model will do nothing useful. When we’re done with base training the model should be a competent next token prediction machine, although it won’t yet know how to chat with us like an assistant or be good at using tools. These will come with future training phases that we’ll get to later, and while important, all of these future phases put together will require only a tiny fraction of the time and money we’re about to spend on base training.</p>
+    <p>The model we’re about to train has 32 transformer blocks. Our main dimension, D, will be 2048 vs the 1280 I showed in most of the examples in earlier chapters. (In <a href="chapter-11.html" class="xref">chapter 11</a> I explained how we come up with D.) Our vocabulary size, V,  remains at 65,536. So how many total parameters will we be training? I mentioned that it’s around 2 billion earlier, but let’s calculate the exact number.</p>
+    <p>Repeating what I did in <a href="chapter-16.html" class="xref">chapter 16</a> but for this 32-layer model, it’s 65,536 × 2048 = <strong>134,217,728</strong> for the embed module. For each of the 32 transformer blocks we have 2048 × 2048 × 4 for the Q, K, V, and final linear transforms for causal self attention, and 2 × 2048 × 4 × 2048 for the MLP. This works out to <strong>1,610,612,736</strong> parameters for all of the transformer blocks. The final linear projection to our vocab is 2048 × 65,536 = <strong>134,217,728</strong>. All together that’s <strong>1,879,048,192</strong> parameters.</p>
+    <p>As you saw even in <a href="chapter-3.html" class="xref">chapter 3</a>, we think about training in steps. In each step we’ll form batches of tokens, feed them to our eight models on our eight GPUs, calculate loss, backpropagate, update parameters, and move to the next step. GPU memory is sufficient to allow each GPU to handle batches with eight sequences each of 2048 tokens. We will run four batches (what’s called a mini-batch) per GPU before calculating the overall gradient and updating parameters across all GPUs (see 23). This means that the total number of tokens we’ll process in a single step is 8 (number of GPUs) × 4 (number of mini-batches) × 8 (number of sequences in a mini-batch) × 2048 (number of tokens in a sequence) = 524,288 tokens. In <a href="chapter-8.html#tbl-8-4" class="xref" data-preview="images/RC078.png">table 8.4</a> I showed examples of the training text that we convert into tokens. I also showed a back of the envelope calculation that 300 tokens is about a page of text, so we’re expecting each step here to process around 1750 pages of text, the equivalent of five to ten novels.</p>
+    <p>So how many steps do we take? That’s not an easy question. Every step costs time and money. If we take too few steps the model won’t be able to learn much. On the other hand, with “only” 1.8 billion parameters, the model can only possibly learn so much, so there’s no point in training on too many tokens.</p>
+    <p>Karpathy looked to an influential research paper that Jordan Hoffmann et. al. from Google published in 2022 based on something Google was in a good position to do—use an enormous amount of compute to train 400 different large language models. These models ranged from 70 million parameters (much smaller than ours) to 16 billion parameters (over 8 times larger). The researchers trained these models on 5 to 500 billion tokens and then evaluated them to come up with useful scaling ratios. Karpathy copied the ratio of the <em>Chinchilla</em> model which the researchers developed using their scaling laws with a goal of achieving the best model performance for a given compute budget.</p>
+    <p>The <em>Chinchilla</em> ratio was 20 meaning 20 training tokens for every parameter. So in our case we want to train on 1,879,048,192 × 20 = 37,580,963,840 tokens. Dividing by 524,288 tokens per step means we need 71,680 steps. Or approximating, 2 billion parameters times twenty tokens per parameter is 40 billion tokens divided by half a million tokens per step is 80,000 steps.</p>
+    <p>So how do we go on a journey of 80,000 steps? First and foremost we take each step: input batches, calculate loss, backpropagate, update parameters. Crossing Death Valley National Park the short way is around 40 miles, about 80,000 steps. You would be crazy to close your eyes and just keep stepping. You’ll want to check in from time to time to make sure you’re on the right path. If you can walk one to two steps a second, but checking that you’re on the right path means pulling a GPS device out of your pocket and acquiring the satellite signal and this takes a minute, of course you can’t afford to do that every step. The idea here is the same.</p>
+    <p>Every 100 steps we’ll log a moving average of the training loss, the number of tokens we’re processing per second, and a number of other metrics. We’ll send these to a monitoring service so we can graph our progress. Logging these metrics requires essentially no extra compute since the training loss is the loss we’re already calculating in order to do backpropagation. If we see that the number of tokens processed per second has a large decrease or increase we’ll know that something is wrong because the work the GPUs need to do in every step should be identical as discussed at the end of <a href="chapter-23.html" class="xref">chapter 23</a>.</p>
+    <p>Every 250 steps we’ll calculate validation loss. We’ll calculate it on text (tokens) that we’ve kept out of the training data. We’ll use twenty times the amount of tokens used in a single training step for validation (around 20 × half a million = 10 million tokens) so this will take time, but much less than twenty times as long as a training step because we don’t need to do backpropagation or parameter updating. And, as you can imagine, we’ll spread the work over all of the GPUs. As discussed in <a href="chapter-10.html" class="xref">chapter 10</a>, if training loss is going down but validation loss is not, we’ll know something is wrong.</p>
+    <p>Every 2000 steps we’ll compute the CORE metric. As you know from <a href="chapter-18.html" class="xref">chapter 18</a>, the full CORE metric requires testing the model on 91,000+ questions across 22 task types. We want to run CORE because it’s the only way we can be confident the model is getting smarter in the way we want, but we don’t want to spend the time/money to run the full evaluation. Instead, to approximate the full metric, we’ll limit the evaluation to a maximum of 500 questions per task. As with validation loss, we’ll spread the computation over all of the GPUs. Interestingly, unlike nearly everything else we do in this phase of training, for CORE evaluation we’ll hit the problem I described in 23 where it’s hard to perfectly balance parallel work. This will be one of the few times during training where some of our GPUs sit around waiting for other GPUs to finish their work. We’ll actually be able to see a “blip” of lower utilization every 2000 steps.</p>
+    <p>We’ll also do something fun every 2000 steps—a form of sanity check. We’ll feed in the following seven prompts and ask the model to generate completions of up to 10 tokens.</p>
+    <ul>
+      <li>The capital of France is</li>
+      <li>The chemical symbol of gold is</li>
+      <li>If yesterday was Friday, then tomorrow will be</li>
+      <li>The opposite of hot is</li>
+      <li>The planets of the solar system are:</li>
+      <li>My favorite color is</li>
+      <li>If 5*x + 3 = 13, then x is</li>
+    </ul>
+    <p>The idea is to provide a tangible sense for the model getting smarter (or not). Of course we need to be careful about reading too much into a handful of completions, though it’s usually a good idea to look at specific examples in addition to aggregate scores like the CORE metric.</p>
+    <p>Earlier, for practice, even before I trained the 20-layer model, I trained a much smaller 12-layer model on 72 million tokens (well under our desired ratio of 20 training tokens per parameter). Here were the completions early in the training and at the end of the training:</p>
+    <figure id="tbl-24-1">
+      <input type="checkbox" id="lb-291" class="lightbox-toggle">
+      <label for="lb-291"><img src="images/RC260.png" alt="" loading="lazy"></label>
+      <label for="lb-291" class="lightbox-overlay"><img src="images/RC260.png" alt=""></label>
+      <figcaption>Table 24.1. Sanity check completions from a 12-layer poorly trained model.</figcaption>
+    </figure>
+    <p>You immediately get the sense that the model is doing <em>something</em>, after all, these aren’t random words. You can tell that the model really likes the word “important.” You can also spot a tiny bit of improvement from early in training to the end. The completions were much better when I trained my 20-layer model and I expect they will also be much better with our 32-layer model.</p>
+    <p>Finally, we’ll monitor GPU metrics like utilization, memory use, and temperature as well as the typical computer CPU and memory metrics you see when you bring up the activity monitor on your own laptop.</p>
+    <p>And now, finally, I’m kicking off the training.</p>
+    <hr class="section-break">
+    <p>As I write these words, it’s been a little over five hours since I kicked off the training. We’re up to step 11,612 which places us 16.2% of the way to the finish line of 71,680 steps. I’m paying $24 an hour to rent eight NVIDIA H100 GPUs and so I’ve spent $127 so far. In total, across all GPUs, we’re processing around 340,000 tokens per second. By estimating the FLOPs required for all the calculations to train each token, I can see that in total across all GPUs I’m seeing around four petaflops per second. That’s a 4 followed by 15 zeros: 4,000,000,000,000,000. Look back at <a href="chapter-17.html" class="xref">chapter 17</a>. My Apple IIe could do 18 floating point operations per second.</p>
+    <p>Let’s look at a few of the metrics we’ve been collecting and see if there are any red flags. Here’s GPU utilization:</p>
+    <figure id="fig-24-1" style="max-width:90%">
+      <input type="checkbox" id="lb-292" class="lightbox-toggle">
+      <label for="lb-292"><img src="images/RC311.png" alt="" loading="lazy"></label>
+      <label for="lb-292" class="lightbox-overlay"><img src="images/RC311.png" alt=""></label>
+      <figcaption>Figure 24.1. GPU utilization for the first almost six hours.</figcaption>
+    </figure>
+    <p>This looks good. Each GPU is running at 100% nearly all of the time. The drops in utilization mostly correspond to when the CORE metric is being calculated. You may have heard that GPUs get hot and consume a lot of electricity. Here’s the temperature:</p>
+    <figure id="fig-24-2" style="max-width:90%">
+      <input type="checkbox" id="lb-293" class="lightbox-toggle">
+      <label for="lb-293"><img src="images/RC312.png" alt="" loading="lazy"></label>
+      <label for="lb-293" class="lightbox-overlay"><img src="images/RC312.png" alt=""></label>
+      <figcaption>Figure 24.2. GPU temperature over the past 40 minutes.</figcaption>
+    </figure>
+    <p>We’re generating some serious heat. Remember that water boils at 100 degrees celsius. I’m not sure why one GPU is consistently hotter than the others. Maybe it has to do with the physical locations of the GPUs. All of mine are sitting in a data center in Texas somewhere so it’s not like I can go look. Here’s the electricity:</p>
+    <figure id="fig-24-3" style="max-width:90%">
+      <input type="checkbox" id="lb-294" class="lightbox-toggle">
+      <label for="lb-294"><img src="images/RC313.png" alt="" loading="lazy"></label>
+      <label for="lb-294" class="lightbox-overlay"><img src="images/RC313.png" alt=""></label>
+      <figcaption>Figure 24.3. GPU power usage.</figcaption>
+    </figure>
+    <p>When all eight GPUs are each consuming 700 watts the total is 5.6 kW. That’s enough power to drive an electric car at city speeds, though not quite at highway speeds.</p>
+    <p>GPU memory is just where we want it, extremely close to 100%. (If you want to point out that allocating 100% is not proof that we’re using 100% the whole time…you’re right.)</p>
+    <figure id="fig-24-4" style="max-width:90%">
+      <input type="checkbox" id="lb-295" class="lightbox-toggle">
+      <label for="lb-295"><img src="images/RC314.png" alt="" loading="lazy"></label>
+      <label for="lb-295" class="lightbox-overlay"><img src="images/RC314.png" alt=""></label>
+      <figcaption>Figure 24.4. Nearly 100% of GPU memory was allocated at the start of training.</figcaption>
+    </figure>
+    <p>Now let’s jump to the CORE metric. Remember from <a href="chapter-18.html" class="xref">chapter 18</a> that the CORE metric will be a number between 0 and 1, the higher the better. Unlike loss, the metric is based on the model answering test questions that we as humans can understand and relate to. If there were one thing we were going to trust as a proxy for the model learning to do something useful, this is it, not GPU temperature or even loss. The training process has now passed step 12,000 so it will have paused and measured the CORE metric six times (at steps 2000, 4000, all the way up to 12,000). Here’s the chart:</p>
+    <figure id="fig-24-5" style="max-width:90%">
+      <input type="checkbox" id="lb-296" class="lightbox-toggle">
+      <label for="lb-296"><img src="images/RC315.png" alt="" loading="lazy"></label>
+      <label for="lb-296" class="lightbox-overlay"><img src="images/RC315.png" alt=""></label>
+      <figcaption>Figure 24.5. CORE metric measured every 2000 steps.</figcaption>
+    </figure>
+    <p>Looks good! We started at 0.15 and we’re now at 0.22. Interestingly the progress hasn’t been as smooth as the chart makes it look. For example, here are the results for SQuAD which was the first task type we looked at in <a href="chapter-18.html" class="xref">chapter 18</a>:</p>
+    <figure id="fig-24-6" style="max-width:90%">
+      <input type="checkbox" id="lb-297" class="lightbox-toggle">
+      <label for="lb-297"><img src="images/RC316.png" alt="" loading="lazy"></label>
+      <label for="lb-297" class="lightbox-overlay"><img src="images/RC316.png" alt=""></label>
+      <figcaption>Figure 24.6. The SQuAD component of CORE.</figcaption>
+    </figure>
+    <p>We went up, then down, then back up. Here’s ARC Easy which was the first multiple choice type of task we looked at in <a href="chapter-18.html" class="xref">chapter 18</a>:</p>
+    <figure id="fig-24-7" style="max-width:90%">
+      <input type="checkbox" id="lb-298" class="lightbox-toggle">
+      <label for="lb-298"><img src="images/RC317.png" alt="" loading="lazy"></label>
+      <label for="lb-298" class="lightbox-overlay"><img src="images/RC317.png" alt=""></label>
+      <figcaption>Figure 24.7. The ARC Easy component of CORE.</figcaption>
+    </figure>
+    <p>And the Dyck language (bracket matching) results look just plain bad. We started at 0.09, almost doubled to 0.17, and then dropped to 0.10. Perhaps there was some training data that was especially helpful for learning to match brackets somewhere between step 8,000 and 10,000 but the learning got messed up by other training data that pushed parameters in a different direction. You should always be careful not to read too much into small percentages of discreet numbers, although here, with 500 questions, the change from 0.09 × 500 = 45 to 0.17 × 500 = 85 is too big to attribute to noise, I imagine.</p>
+    <figure id="fig-24-8" style="max-width:90%">
+      <input type="checkbox" id="lb-299" class="lightbox-toggle">
+      <label for="lb-299"><img src="images/RC318.png" alt="" loading="lazy"></label>
+      <label for="lb-299" class="lightbox-overlay"><img src="images/RC318.png" alt=""></label>
+      <figcaption>Figure 24.8. The Dyck component of CORE.</figcaption>
+    </figure>
+    <p>These charts help me appreciate why it’s important to have a broad, general purpose way of evaluating when we’re trying to create a broad, general purpose model.</p>
+    <p>Here’s our validation loss. (The reason it’s called <em>bpb</em> is because we adjust the loss to be per byte rather than per token so it can be compared to a model trained with a different sized vocabulary. This isn’t important for our purposes here but would be if we wanted to run experiments to determine the ideal vocab size as mentioned briefly in <a href="chapter-7.html" class="xref">chapter 7</a>.)</p>
+    <figure id="fig-24-9" style="max-width:90%">
+      <input type="checkbox" id="lb-300" class="lightbox-toggle">
+      <label for="lb-300"><img src="images/RC319.png" alt="" loading="lazy"></label>
+      <label for="lb-300" class="lightbox-overlay"><img src="images/RC319.png" alt=""></label>
+      <figcaption>Figure 24.9. Validation loss over the first ~13,000 steps.</figcaption>
+    </figure>
+    <p>This too looks good. We’re measuring the validation loss every 250 steps and it appears to be steadily declining. To be sure we also need to zoom in. Let’s look from 10,000 steps to the present:</p>
+    <figure id="fig-24-10" style="max-width:90%">
+      <input type="checkbox" id="lb-301" class="lightbox-toggle">
+      <label for="lb-301"><img src="images/RC320.png" alt="" loading="lazy"></label>
+      <label for="lb-301" class="lightbox-overlay"><img src="images/RC320.png" alt=""></label>
+      <figcaption>Figure 24.10. Zooming in on validation loss from step 10,000 to ~14,000.</figcaption>
+    </figure>
+    <p>Now the fun part. How are our prompt completions doing?</p>
+    <figure id="tbl-24-2">
+      <input type="checkbox" id="lb-302" class="lightbox-toggle">
+      <label for="lb-302"><img src="images/RC261.png" alt="" loading="lazy"></label>
+      <label for="lb-302" class="lightbox-overlay"><img src="images/RC261.png" alt=""></label>
+      <figcaption>Table 24.2. Sanity check completions.</figcaption>
+    </figure>
+    <p>The generated text at step 2000 is much better than the example I showed in <a href="#tbl-24-1" class="xref" data-preview="images/RC260.png">table 24.1</a>, but step 14,000 is not much better than step 2000. This is yet another reminder of why we need thorough evaluations and can’t trust spot checking. I checked and 79 is the atomic number for gold. And wouldn’t it be nice if there was a day in between Friday and Saturday?</p>
+    <hr class="section-break">
+    <p>I went to bed. I woke up. Training is up to 40,450 steps, 56% of the way to the finish line. Is validation loss still looking good?</p>
+    <figure id="fig-24-11" style="max-width:90%">
+      <input type="checkbox" id="lb-303" class="lightbox-toggle">
+      <label for="lb-303"><img src="images/RC321.png" alt="" loading="lazy"></label>
+      <label for="lb-303" class="lightbox-overlay"><img src="images/RC321.png" alt=""></label>
+      <figcaption>Figure 24.11. Validation loss over the first 40,000+ steps.</figcaption>
+    </figure>
+    <p>Zoom in:</p>
+    <figure id="fig-24-12" style="max-width:90%">
+      <input type="checkbox" id="lb-304" class="lightbox-toggle">
+      <label for="lb-304"><img src="images/RC322.png" alt="" loading="lazy"></label>
+      <label for="lb-304" class="lightbox-overlay"><img src="images/RC322.png" alt=""></label>
+      <figcaption>Figure 24.12. Validation loss zoomed in to see if it’s still declining.</figcaption>
+    </figure>
+    <p>Yes! Let me show you a boring chart that’s also remarkable.</p>
+    <figure id="fig-24-13" style="max-width:90%">
+      <input type="checkbox" id="lb-305" class="lightbox-toggle">
+      <label for="lb-305"><img src="images/RC323.png" alt="" loading="lazy"></label>
+      <label for="lb-305" class="lightbox-overlay"><img src="images/RC323.png" alt=""></label>
+      <figcaption>Figure 24.13. Step vs number of seconds since start of training.</figcaption>
+    </figure>
+    <p>Our training factory has been running for over 18 hours. Step after step after step takes about the same amount of time. This makes sense in theory given everything we’ve discussed about how all the batches are the same sizes, the calculations are identical, and how GPUs operate. Yet if you’ve had experience with more traditional computer systems or really creating and monitoring any type of process in life, you’ll recognize how rare and difficult it is to achieve consistency.</p>
+    <p>One other observation before we wait for the training to complete: It’s going incredibly smoothly so far. It’s nice to have all this monitoring, but it’s not like we need it. But it’s going smoothly <em>only</em> because I’m using the architecture, optimizers, learning rate schedulers, initialization strategies and values (not discussed), batch sizes, and other hyperparameters that Karpathy figured out. I’m sure he did many, many training runs where things went off the rails and the monitoring was critical to a) telling him it was going off the rails and b) providing clues to the problem. For example, validation loss might have stopped decreasing 20 hours in (ugh!) or GPUs might have been at only 50% utilization.</p>
+    <p>And of course Karpathy doesn’t deserve all the credit because he drew on all of the research I discussed above and much more that I didn’t discuss and don’t know about. Not long ago training a deep model was considered impossible, not just due to the time/cost of the calculations, but because gradients would vanish or explode. Our model is able to train and get smart because of the residual connections and norming in the architecture, the innovations in optimizers like Adam and Muon, and of course the key idea in the architecture of the transformer: casual self-attention.</p>
+    <hr class="section-break">
+    <p>This is like a baking show where you get to skip ahead until we take the cake out of the oven. Base training is done. Step 71,680 just completed, 32 hours 41 minutes and 43 seconds after starting. All outward signs are that training went smoothly since we last checked in. Overall our CORE metric went from 0.15 when we first checked at step 2000 to 0.30. (Soon we’ll measure CORE on the full 90,000+ examples.)</p>
+    <figure id="fig-24-14" style="max-width:90%">
+      <input type="checkbox" id="lb-306" class="lightbox-toggle">
+      <label for="lb-306"><img src="images/RC324.png" alt="" loading="lazy"></label>
+      <label for="lb-306" class="lightbox-overlay"><img src="images/RC324.png" alt=""></label>
+      <figcaption>Figure 24.14. CORE metric measured every 2000 steps during the entire training.</figcaption>
+    </figure>
+    <p>Validation loss consistently declined other than one brief increase between steps 8750 and 9750:</p>
+    <figure id="fig-24-15" style="max-width:90%">
+      <input type="checkbox" id="lb-307" class="lightbox-toggle">
+      <label for="lb-307"><img src="images/RC325.png" alt="" loading="lazy"></label>
+      <label for="lb-307" class="lightbox-overlay"><img src="images/RC325.png" alt=""></label>
+      <figcaption>Figure 24.15. Validation loss.</figcaption>
+    </figure>
+    <p>The smooth graph makes it look too easy and hides how remarkable this is. This is not like the hedgehog models from <a href="chapter-10.html" class="xref">chapter 10</a>. There I was using the same training data over and over during successive training steps. You could see with your own eyes that validation loss would go down until the model started overfitting to noise in the training data. Here, each of the 70,000+ training steps used an entirely new batch of over half a million tokens of training data. And the validation data was different text altogether. Here are 155 of the 10.5 million tokens in the validation dataset:</p>
+    <div class="inset">
+      <p>Daily water levels on each of the Great Lakes, except Lake Superior, increased during December. The level of Lake Superior fell by its average amount, while levels on Lakes Michigan-Huron experienced a small, but welcome, increase. Water levels on lakes Erie and Ontario increased much more than average during December. Daily water levels on Lake Superior fell 8 cm during December, equal to the average decline for the month. The level of Lakes Michigan-Huron rose 6 cm, instead of falling a few centimetres as it usually does. Daily water levels on lakes Erie and Ontario increased 12 and 18 cm, respectively. On average, these two lakes have increased by just 1 cm in past Decembers during the 1918-2007 period of record.</p>
+    </div>
+    <p>So after every 250 training steps, each time learning from 131+ million new tokens of text, the ability to predict next tokens in this distinct validation text went up. The optimistic and I think correct interpretation of this is that language, knowledge, and common sense can in fact be modeled.</p>
+    <p>Let’s zoom into the validation loss from step 40,000 on to double check that it did not flatten out:</p>
+    <figure id="fig-24-16" style="max-width:90%">
+      <input type="checkbox" id="lb-308" class="lightbox-toggle">
+      <label for="lb-308"><img src="images/RC326.png" alt="" loading="lazy"></label>
+      <label for="lb-308" class="lightbox-overlay"><img src="images/RC326.png" alt=""></label>
+      <figcaption>Figure 24.16: Validation loss zoomed in from step 40,000 to the end.</figcaption>
+    </figure>
+    <p>It did not flatten out. In fact the rate of decline increased around step 57,000. Let me show you why. We’ve talked about learning rate and I briefly hinted above that even with our fancy optimizers we still use a learning rate scheduler. The idea is that at a certain point parameters are jumping around a little too much (see <a href="chapter-19.html#fig-19-13" class="xref" data-preview="images/RC230.png">figure 19.13</a>) and taking even smaller update steps will allow the optimizers to further minimize loss. The scheduler we use for base training says to keep the <em>learning rate multiplier</em> at 1.0 until we are 80% through with training and then slowly reduce it to 0 over the remaining steps.</p>
+    <figure id="fig-24-17" style="max-width:90%">
+      <input type="checkbox" id="lb-309" class="lightbox-toggle">
+      <label for="lb-309"><img src="images/RC327.png" alt="" loading="lazy"></label>
+      <label for="lb-309" class="lightbox-overlay"><img src="images/RC327.png" alt=""></label>
+      <figcaption>Figure 24.17. Learning rate multiplier.</figcaption>
+    </figure>
+    <p>As an example of how the learning rate multiplier is used, consider the Muon optimizer responsible for updating the parameters in the transformer blocks. It starts with a learning rate of 0.2 and remains at 0.2 until around step 57,300. At around step 64,500 it will be at 0.1. The specifics of the initial learning rate and the schedule for the learning rate multiplier are yet more configurable hyperparameters. They likely make a big difference and I’m benefiting yet again from the fact that Karpathy already figured out appropriate settings.</p>
+    <p>Here are the sanity check completions:</p>
+    <figure id="tbl-24-3">
+      <input type="checkbox" id="lb-310" class="lightbox-toggle">
+      <label for="lb-310"><img src="images/RC262.png" alt="" loading="lazy"></label>
+      <label for="lb-310" class="lightbox-overlay"><img src="images/RC262.png" alt=""></label>
+      <figcaption>Table 24.3. Sanity check completions.</figcaption>
+    </figure>
+    <p>It was correct about “then tomorrow will be” on step 62,000 and several prior steps, but in the end it got it wrong. It never solved the math problem.</p>
+    <p>SQuAD, one of the components of CORE, was at 6% right after step 2000 and was at 25% when we last checked in. We ended at 44%.</p>
+    <figure id="fig-24-18" style="max-width:90%">
+      <input type="checkbox" id="lb-311" class="lightbox-toggle">
+      <label for="lb-311"><img src="images/RC328.png" alt="" loading="lazy"></label>
+      <label for="lb-311" class="lightbox-overlay"><img src="images/RC328.png" alt=""></label>
+      <figcaption>Figure 24.18. The SQuAD component of CORE over the whole training.</figcaption>
+    </figure>
+    <p>If you remember, for SQuAD and all of CORE, we used only a subset of the full 90,000+ questions in order to not consume too much time during training. Now that we’re done I’ll run a full CORE evaluation:</p>
+    <figure id="tbl-24-4">
+      <input type="checkbox" id="lb-312" class="lightbox-toggle">
+      <label for="lb-312"><img src="images/RC263.png" alt="" loading="lazy"></label>
+      <label for="lb-312" class="lightbox-overlay"><img src="images/RC263.png" alt=""></label>
+      <figcaption>Table 24.4. Complete CORE evaluation.</figcaption>
+    </figure>
+    <p>CORE overall came in at 0.3 matching our estimate. SQuAD came in at 0.40 so we were “lucky” (or unlucky depending on your perspective) with the 500 questions used during our smaller evaluations. We now get 72% of the ARC easy questions right (that’s impressive!) and 40% of SQuAD, but our 32-layer model is atrocious compared to a human at the LSAT analytical reasoning questions. It also doesn’t know how to balance brackets: look at the bigbench_dyck_languages score.</p>
+    <p>How much did base training cost? If I look strictly at the training, it was 32.7 hours × $23.92 per hour = $782. However, I made the mistake of also training the tokenizer on the same machine which meant I was paying for GPUs to sit around and do nothing. I also made a sloppy error the first time I kicked off the training. I need to take those into account, plus running the CORE evaluation at the end, plus leaving the machine running while I copied the final model to my laptop. So overall I rented the GPUs for 35.25 hours and spent $843.16. This isn’t a cheap hobby. The next three phases of training should all be much faster, so if I’m careful, I still have a shot at coming in under Karpathy’s promised $1000.</p>
+    <hr class="section-break">
+    <p>I don’t know about you, but before we move to the next phase of training, I’m itching to play with this base-trained model beyond those few sanity check prompts. One starting point is SQuAD. I know we’re now answering 40% right. But I want to see it. I wrote a script to randomly pick 25 of the 10,570 SQuAD questions, test if the model gets them right or wrong, and print the model output. Let’s start with the first one we get correct. The full passage is over 450 words. I don’t want to copy it here and you won’t want to read it so I’ll use ellipses liberally:</p>
+    <div class="inset">
+      <p>Context: Since its founding, the EU has operated among an increasing plurality of national and globalising legal systems…named Mr Costa refused to pay his electricity bill to Enel, as a protest against the nationalisation of the Italian energy corporations. He claimed the Italian nationalisation law conflicted with the Treaty of Rome…By contrast, the Court of Justice held that ultimately the Treaty of Rome in no way prevented energy nationalisation…Question: <strong>Which court argued that the Treaty of Rome did not prevent energy nationalism?</strong> Answer:</p>
+    </div>
+    <p>Our model, at temperature zero meaning it is picking the most likely next token each time, outputs “the Court of Justice.” This is correct.</p>
+    <p>Here’s the first question from my random sample that the model gets wrong:</p>
+    <div class="inset">
+      <p>Context: After the disastrous 1757 British campaigns (resulting in a failed expedition against Louisbourg and the Siege of Fort William Henry, which was followed by Indian torture and massacres of British victims), the British government fell. William Pitt came to power and significantly increased British military resources in the colonies at a time when France was unwilling to risk large convoys to aid the limited forces it had in New France. France concentrated its forces against Prussia and its allies in the European theatre of the war.  Between 1758 and 1760, the British military launched a campaign to capture the Colony of Canada. They succeeded in capturing territory in surrounding colonies and ultimately Quebec. Though the British were later defeated at Sainte Foy in Quebec, the French ceded Canada in accordance with the 1763 treaty. Question: <strong>How much resources were French placing in North America?</strong> Answer:</p>
+    </div>
+    <p>This seems like a poorly worded question. I guess I would answer “not many.” The expected answer is “unwilling to risk large convoys to aid the limited forces it had in New France.” That may be the appropriate snippet of text from the passage but it’s a pretty strange answer.</p>
+    <p>Here’s what the model said: “1758-1760: 1,000,000.” That’s also not a correct answer, although kudos to the model for trying to fit an answer to “how much resources.” Maybe this gives you some insight into hallucination.</p>
+    <p>In <a href="chapter-12.html" class="xref">chapter 12</a> I discussed how crowdsourcing was used to assemble and check the SQuAD questions and answers. Seeing this example reminds me that crowdsourcing is not foolproof. It also plants a seed in my brain that if a model ever achieves 100% on SQuAD it’s a sign that something is wrong, such as that that evaluation data leaked into training data.</p>
+    <p>Here’s the next wrong question:</p>
+    <div class="inset">
+      <p>Context: On the television side, in September 1969, ABC launched the Movie of the Week, a weekly showcase aimed at capitalizing on the growing success of made-for-TV movies since the early 1960s.  The Movie of the Week broadcast feature-length dramatic films directed by such talented filmmakers as Aaron Spelling, David Wolper and Steven Spielberg (the latter of whom gained early success through the showcase for his 1971 film Duel) that were produced on an average budget of $400,000–$450,000. Hits for the television network during the late 1960s and early 1970s included The Courtship of Eddie&#x27;s Father, The Brady Bunch and The Partridge Family. Question: <strong>For which ABC Movie of the Week film did Steven Spielberg first gain success?</strong> Answer:</p>
+    </div>
+    <p>The expected answer is “Duel.” Our model says “The Partridge Family.” That’s a clear wrong answer. I also looked at a few possible outputs from the model with a temperature of 1.0. One of them was “Duel” which tells me the model was not <em>too</em> far from correct.</p>
+    <p>Let’s look at one more wrong one. Here’s the next one: (I’m purposely going in order so you know I’m not cherry picking. I’m not promising I’ll always do that going forward but I think here it’s helpful to form an accurate sense for how these CORE questions work.)</p>
+    <div class="inset">
+      <p>Context: In February 2010, in response to controversies regarding claims in the Fourth Assessment Report, five climate scientists – all contributing or lead IPCC report authors – wrote in the journal Nature calling for changes to the IPCC. They suggested a range of new organizational options, from tightening the selection of lead authors and contributors, to dumping it in favor of a small permanent body, or even turning the whole climate science assessment process into a moderated &quot;living&quot; Wikipedia-IPCC. Other recommendations included that the panel employ a full-time staff and remove government oversight from its processes to avoid political interference.<strong> Question: What was one proposal to let the IPCC respond to new evidence faster?</strong> Answer:</p>
+    </div>
+    <p>The expected answer is: “turning the whole climate science assessment process into a moderated ‘living’ Wikipedia-IPCC.” Our model said: “a full-time staff.” That seems like just as good an answer.</p>
+    <p>How about the multiple choice questions? Our model got 72% of the ARC Easy questions correct. I randomly picked 20 questions to look at knowing that most will be right. The model happened to get the first one wrong. I’ll come back to it. Let’s look at the second for which it correctly chose “A) sunlight.”</p>
+    <div class="inset">
+      <p>What is the primary source of stored thermal energy in oceans?</p>
+      <ol type="A">
+        <li>sunlight</li>
+        <li>plankton</li>
+        <li>volcanoes</li>
+        <li>hurricanes</li>
+      </ol>
+    </div>
+    <p>I think I would get that right too. In <a href="chapter-18.html" class="xref">chapter 18</a> I showed how the model calculates a probability for each answer and we consider the answer with the highest probability to be the model’s choice. Here were the probabilities for the four choices:</p>
+    <figure id="fig-24-19" style="max-width:70%">
+      <input type="checkbox" id="lb-313" class="lightbox-toggle">
+      <label for="lb-313"><img src="images/RC264.png" alt="" loading="lazy"></label>
+      <label for="lb-313" class="lightbox-overlay"><img src="images/RC264.png" alt=""></label>
+      <figcaption>Figure 24.19. Probability the model assigned to each multiple choice answer.</figcaption>
+    </figure>
+    <p>Our model not only picked the correct answer, it’s very confident that it’s the right answer. Imagine if on middle school multiple choice questions students needed to state their confidence level.</p>
+    <p>Let’s go back to that first question which the model got wrong.</p>
+    <div class="inset">
+      <p>Which explains how the epithelium offers protection to land-dwelling vertebrates?</p>
+      <ol type="A">
+        <li>Epithelium provides a rigid shell to prevent punctures.</li>
+        <li>Epithelium has capillaries to resist iron deficiency.</li>
+        <li>Epithelium insulates the vertebrate from hypothermia.</li>
+        <li>Epithelium prevents dehydration in vertebrates.</li>
+      </ol>
+    </div>
+    <p>I couldn’t help but look at the correct answer, but otherwise I would be very unsure. I’m thinking humans and mice and lizards don’t have rigid shells, so possibly I could rule out A), and B) sounds weird. The model chose A). The correct answer is D). Here are the probabilities predicted by the model:</p>
+    <figure id="fig-24-20" style="max-width:70%">
+      <input type="checkbox" id="lb-314" class="lightbox-toggle">
+      <label for="lb-314"><img src="images/RC265.png" alt="" loading="lazy"></label>
+      <label for="lb-314" class="lightbox-overlay"><img src="images/RC265.png" alt=""></label>
+      <figcaption>Figure 24.20. Probabilities predicted by the model for the multiple choice answers to “Which explains how the epithelium offers protection to land-dwelling vertebrates?”</figcaption>
+    </figure>
+    <p>So it picked A), but it wasn’t all that confident, and its next best choice, D), was correct. It seemed to agree with me that B) is unlikely.</p>
+    <p>I wonder if the per-token probabilities will yield insight into why the model selected A). For example, to me, as soon as I saw “rigid shell” possibility A) became less likely. Let’s look:</p>
+    <figure id="tbl-24-5">
+      <input type="checkbox" id="lb-315" class="lightbox-toggle">
+      <label for="lb-315"><img src="images/RC266.png" alt="" loading="lazy"></label>
+      <label for="lb-315" class="lightbox-overlay"><img src="images/RC266.png" alt=""></label>
+      <figcaption>Table 24.5. Per-token probabilities for each token in each multiple choice answer.</figcaption>
+    </figure>
+    <p>“Punctures” is two tokens which makes it hard to compare. Let me calculate the combined probability (such that the overall averaged probability remains the same) and also eliminate the less likely choices B) and C). I’ll also show the total probability (actually the geometric mean of the total probability) up to each token.</p>
+    <figure id="tbl-24-6">
+      <input type="checkbox" id="lb-316" class="lightbox-toggle">
+      <label for="lb-316"><img src="images/RC267.png" alt="" loading="lazy"></label>
+      <label for="lb-316" class="lightbox-overlay"><img src="images/RC267.png" alt=""></label>
+      <figcaption>Table 24.6. Probability the model assigns to multiple choices A) and D) as its “reading” them.</figcaption>
+    </figure>
+    <p>The probability of “rigid shell” is low for the model, just as it was for me, but not low enough to let D) take the lead. It’s interesting that if choice A) was missing the “a,” this likely would have knocked it into second place. Maybe this is like the student who doesn’t know the correct answer but figures it’s not the one with the grammar error.</p>
+    <p>I also wonder how much the model learned about “epithelium” during training. It seems like a reasonably rare word to me, but then again, the world is a big place. I have all the training data so let me search.</p>
+    <p>Wow! Over 50,000 documents in the training data contain “epithelium” and in total it appears 112,482 times. I’ll randomly pick five occurrences and show the surrounding text to get a feel for how it’s used.</p>
+    <ul>
+      <li>low-copy structures. The EGFP reporter gene was found to be expressed in the vascular <strong>epithelium</strong> of various positive tissues of adult animals. In a new study, mice xenografted with human melanoma</li>
+      <li>The gut mucosal <strong>epithelium</strong> - The delicate, single-cell thick barrier translating key information to your immune cells and</li>
+      <li>to maintain appropriate lens osmotic concentration and volume, with equatorially positioned lens <strong>epithelium</strong> cells contributing most to this current. The activity of the Na+/K+-ATPases keeps water and current</li>
+      <li>scarring regarded as the characteristic fibrosis of the lungs. The resulting fibrosis damages the <strong>epithelium</strong> of the lungs, making gas-exchange inefficient. Thick mucus also physically reduces the surface area</li>
+      <li>○ Lipase ● Bile from liver emulsifies fats ○ Breaks the fat up into small droplets ● <strong>Epithelium</strong> of the Duodenum ○ Disaccharidases ○ Peptidases breaks up peptides ○ Nucleotidase break apart</li>
+    </ul>
+    <p>So from this albeit very small (&lt; .004%) sample, it looks like it comes up in scientific papers and medical materials.</p>
+    <p>Let’s move away from the epithelium and look at the next wrong ARC question:</p>
+    <div class="inset">
+      <p>The Hardy-Weinberg law is only valid when</p>
+      <ol type="A">
+        <li>the population is small.</li>
+        <li>migration into the population is occurring.</li>
+        <li>immigration into the population is occurring.</li>
+        <li>the population is large.</li>
+      </ol>
+    </div>
+    <p>The model says A). The correct answer is D).</p>
+    <figure id="fig-24-21" style="max-width:70%">
+      <input type="checkbox" id="lb-317" class="lightbox-toggle">
+      <label for="lb-317"><img src="images/RC268.png" alt="" loading="lazy"></label>
+      <label for="lb-317" class="lightbox-overlay"><img src="images/RC268.png" alt=""></label>
+      <figcaption>Figure 24.21. Probabilities predicted by the model for the multiple choice answers to “The Hardy-Weinberg law is only valid when…”</figcaption>
+    </figure>
+    <p>This is again a situation where the model was not terribly confident in its top answer and its next choice was correct. In fact, for all of the wrong ARC Easy answers in my small sample, the next choice was the right one except for the question I’ll show next. (I wonder about the science teacher somewhere, somewhen who decided to make it easy for students to eliminate B) and C) because they are too similar. Or was it a mistake and one was meant to say <em>out</em> of the population?)</p>
+    <p>Here’s the one ARC Easy question in my sample where even the model’s second choice was wrong. It’s another hint, along with the “If 5*x…” sanity check prompt, that our model is not good at math.</p>
+    <div class="inset">
+      <p>What is the mass of an asteroid with a speed of 200 m/s and a momentum of 2,000 kg x m/s?</p>
+      <ol type="A">
+        <li>10 kg</li>
+        <li>1,800 kg</li>
+        <li>2,200 kg</li>
+        <li>400,000 kg</li>
+      </ol>
+    </div>
+    <p>The correct answer is A).</p>
+    <figure id="fig-24-22" style="max-width:70%">
+      <input type="checkbox" id="lb-318" class="lightbox-toggle">
+      <label for="lb-318"><img src="images/RC269.png" alt="" loading="lazy"></label>
+      <label for="lb-318" class="lightbox-overlay"><img src="images/RC269.png" alt=""></label>
+      <figcaption>Figure 24.22. Probabilities predicted by the model for the multiple choice answers to the mass of an asteroid question.</figcaption>
+    </figure>
+    <p>We don’t need a fancy dataset to tell us our model isn’t great at math. I tried these problems:</p>
+    <figure id="tbl-24-7" style="max-width:70%">
+      <input type="checkbox" id="lb-319" class="lightbox-toggle">
+      <label for="lb-319"><img src="images/RC270.png" alt="" loading="lazy"></label>
+      <label for="lb-319" class="lightbox-overlay"><img src="images/RC270.png" alt=""></label>
+      <figcaption>Table 24.7. My own tiny math benchmark.</figcaption>
+    </figure>
+    <p>In each case the prompt was up to and including the equal sign and the rest was generated by the model. It seems likely that it memorized the answers to certain calculations that came up repeatedly in the training data but did not learn to do arithmetic.</p>
+    <p>Our model isn’t great at math, but the CORE evaluation tells us it is good at many other things, and we trained it entirely from scratch. It’s time to refine it into a chat model.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-23.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-25.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>

@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Chapter 6: Translation and transformers &#8212; How They Think</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <nav class="chapter-nav">
+    <a href="chapter-5.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-7.html">Next &#8594;</a>
+  </nav>
+  <article>
+    <div class="chapter-heading">
+      <p class="chapter-number">6</p>
+      <hr class="chapter-rule">
+      <h1>Translation and transformers</h1>
+    </div>
+    <p>Enough with the turkeys. Let’s get back to language, starting with translation. And I promise I’m not going there because I love foreign languages and translation. Translation is an essential part of the GPT story.</p>
+    <p>Almost as long as there have been computers, researchers have been trying to build machine translation systems to automatically translate text from one language to another. There are countless applications for translation including in things that governments care about like spying and defense, so you can imagine where the funding came from.</p>
+    <figure id="fig-6-1" style="max-width:60%">
+      <input type="checkbox" id="lb-55" class="lightbox-toggle">
+      <label for="lb-55"><img src="images/RC381.png" alt="" loading="lazy"></label>
+      <label for="lb-55" class="lightbox-overlay"><img src="images/RC381.png" alt=""></label>
+      <figcaption>Figure 6.1. A New York Times article from January 8, 1954 about the Georgetown–IBM experiment in machine translation.</figcaption>
+    </figure>
+    <p>I started my first software company, Idiom Technologies, in 1998. We created software to manage translation—think the screens of software like Photoshop, websites like eBay, help documentation, marketing pages, and car manuals. And imagine a process like extract text from formatting and code in files, send the text out to human translators, give translators tools to maintain consistency with prior translations, put the files back together, and run the translated content by employees in country to check quality, all online, which was novel back then. Our software was not a machine translation system, but I was exposed to machine translation because our software could pull in automatically translated text and send it to humans for editing.</p>
+    <p>Now this was something like 45 years after the first research into machine translation, and the state of it was…bad. The systems out there used one of two approaches, or a mix of both. There was the traditional approach which was the only tractable approach for a prior generation of computers. A source sentence would be parsed into a language-agnostic structure that linked subject, object, verb, etc., the equivalent <em>parse tree</em> would be looked up in the foreign language, words would be converted using a bilingual dictionary, grammar rules would be applied, and then the sentence in the target language would be spit out. Then there was the newer statistical approach which was related to the n-gram ideas we discussed in <a href="chapter-2.html" class="xref">chapter 2</a>. This approach involved first collecting lots and lots of parallel sentences in source and target languages. Then new sentences could be translated by looking for snippets of the same or similar text and mixing and matching structure and words.</p>
+    <p>Each approach could be useful in certain narrow and controlled domains. For example—translating weather reports. Weather reports are formulaic to begin with, often produced madlibs style where words are substituted into a template with limited if/then logic. So it’s not a surprise that a formulaic approach to translation could translate text generated from a formula.</p>
+    <p>What about the text our customers were translating? Machine translation was woefully inadequate. And it’s not like our customers were worried about artistic content, figurative language, or conveying emotion. They dealt with straightforward text like instructions for changing a tire, or a confirmation screen after posting an item for sale, or a tutorial on drawing a wall in CAD software. These were all way beyond the capabilities of machine translation.</p>
+    <p>I’m slightly ashamed to admit that if you asked me at the time if I thought machine translation would ever be “good,” I would have said no, not in my lifetime. I thought the people working on machine translation were naive. To translate something from say English to Chinese you first have to understand it. Your brain has to take a paragraph as input and combine it with everything you already read <em>and</em> all the relevant common sense and world knowledge you have from living, turn this into some abstract representation in your brain, and then re-create this representation in the foreign language, again with sensitivity to concepts in the real world. In other words, I thought there was no shortcut to translation that bypassed understanding.</p>
+    <p>In 2017, Ashish Vaswani and seven fellow researchers from Google published a paper that is now, not all that many years later, considered one of the most significant papers ever in AI: <em>Attention Is All You Need.</em> In it they introduced a new type of AI model—the transformer. Here it is shown in figure 1 of the paper. Don’t worry about the details of the diagram. It will make sense after you’re done reading this book.</p>
+    <figure id="fig-6-2" style="max-width:60%">
+      <input type="checkbox" id="lb-56" class="lightbox-toggle">
+      <label for="lb-56"><img src="images/RC051.png" alt="" loading="lazy"></label>
+      <label for="lb-56" class="lightbox-overlay"><img src="images/RC051.png" alt=""></label>
+      <figcaption>Figure 6.2: The famous figure 1 from <em>Attention Is All You Need.</em></figcaption>
+    </figure>
+    <p>The problem Vaswani et al. were working on, and the reason they called their invention the “Transformer,” was language translation. They trained the model on 4.5 million English / German bilingual sentence pairs. The resulting trained model handily beat all existing approaches to the shock of the machine translation research community.</p>
+    <p>From there, I imagine, some of the researchers had the same thoughts I expressed above. The quality of translation was proof that the model was <em>understanding</em> the input text in some non-trivial way, including relating concepts in the text to knowledge out in the world, like we humans do. What if we could separate the model’s ability to understand from the whole language translation part? First, this would make the invention applicable to a wide variety of tasks unrelated to translation. Second, you wouldn’t need to limit training data to bilingual content—you could train it on all the text you could possibly find, at least to the limits of available time and hardware constraints.</p>
+    <p>With the original transformer, you can think of the target language text generation as being guided both by the full source text and whatever portion of the target text has been generated so far. For example, if we’re asking the model to translate “He went to the store” into German, our starting point for German is a blank slate. (Technically it’s a <em>beginning of sequence</em> token. We’ll get to that later.) The model needs to pick a first word. It does so with the context of the English sentence and everything it knows about the world and hopefully picks “Er,” the German word for “He.”</p>
+    <p>Next the model needs to decide what word comes after “Er.” It now has the context of the English sentence (“He went to the store”), the German it generated so far (“Er”), and its world knowledge. You can begin to see how this is a little like the n-gram model from <a href="chapter-2.html" class="xref">chapter 2</a> in that the model needs to find a word that is likely to fit after “Er.”</p>
+    <p>In a general purpose non-translation transformer, though, there is no complete thought in a source language to guide the generation. Starting with all its world knowledge and a blank slate, the model could generate text that is true or interesting, but unlikely to be of any use. The key idea was to give the model a snippet of starting text and have it generate more text from there. This is the idea of a <strong>prompt</strong>. You’ll learn exactly how prompts get processed. In <a href="chapter-24.html" class="xref">chapter 24</a>, after we base train our 32-layer model, you’ll see how we use prompts to evaluate the quality of the model, and then you’ll see how we refine the model to make it especially good at handling prompts where it acts as a helpful assistant like ChatGPT.</p>
+    <p>But that’s getting ahead of ourselves. If you look at the transformer diagram in <a href="#fig-6-2" class="xref" data-preview="images/RC051.png">figure 6.2</a> you may have questions—why is there output going <em>into</em> the model, what are embeddings, what is multi-head attention (must be important since the title of the paper was <em>All You Need Is Attention</em>), how do you feed in the training data, and how do you generate translations? In chapters <a href="chapter-7.html" class="xref">7</a>–<a href="chapter-22.html" class="xref">22</a> we’ll be working our way through a GPT model and when done I’m confident most of the boxes in the original transformer will make sense. If you come back to this chapter and want to understand the connection between the left and right sides of the original transformer, which we won’t see in our GPT model, read my blog post <em>Tracing the Transformer in Diagrams.</em> I’ll include the link in the further reading section.</p>
+    <p>In this chapter I said we put text into the model and get text out, but you can guess from the discussion of matrices in <a href="chapter-5.html" class="xref">chapter 5</a> that the text is going to have to somehow get turned into numbers and put into a matrix. We’ll cover that next.</p>
+  </article>
+  <nav class="chapter-nav">
+    <a href="chapter-5.html">&#8592; Previous</a>
+    <a href="index.html">Contents</a>
+    <a href="chapter-7.html">Next &#8594;</a>
+  </nav>
+  <footer class="site-footer"><em>How They Think</em> &mdash; February 7, 2026 rough draft &mdash; &copy; Eric Silberstein</footer>
+  <div id="preview-tooltip" class="preview-tooltip" hidden>
+    <img id="preview-tooltip-img" src="" alt="">
+  </div>
+  <script>
+  (function() {
+    var tip = document.getElementById('preview-tooltip');
+    var img = document.getElementById('preview-tooltip-img');
+    var links = document.querySelectorAll('a.xref[data-preview]');
+    var hideTimer;
+    function show(e) {
+      clearTimeout(hideTimer);
+      var src = e.currentTarget.getAttribute('data-preview');
+      if (img.getAttribute('src') !== src) img.setAttribute('src', src);
+      tip.removeAttribute('hidden');
+      position(e);
+    }
+    function position(e) {
+      var rect = e.currentTarget.getBoundingClientRect();
+      var tw = Math.min(480, window.innerWidth - 32);
+      var left = rect.left + rect.width / 2 - tw / 2;
+      if (left < 8) left = 8;
+      if (left + tw > window.innerWidth - 8) left = window.innerWidth - 8 - tw;
+      tip.style.width = tw + 'px';
+      tip.style.left = left + 'px';
+      var above = rect.top - 8;
+      var below = window.innerHeight - rect.bottom - 8;
+      if (above > below) {
+        tip.style.bottom = (window.innerHeight - rect.top + 8) + 'px';
+        tip.style.top = 'auto';
+      } else {
+        tip.style.top = (rect.bottom + 8) + 'px';
+        tip.style.bottom = 'auto';
+      }
+    }
+    function hide() {
+      hideTimer = setTimeout(function() { tip.setAttribute('hidden', ''); }, 120);
+    }
+    links.forEach(function(a) {
+      a.addEventListener('mouseenter', show);
+      a.addEventListener('mouseleave', hide);
+    });
+    tip.addEventListener('mouseenter', function() { clearTimeout(hideTimer); });
+    tip.addEventListener('mouseleave', hide);
+    document.addEventListener('keydown', function(e) {
+      if (e.key === 'Escape') {
+        var open = document.querySelector('.lightbox-toggle:checked');
+        if (open) open.checked = false;
+      }
+    });
+  })();
+  </script>
+</body>
+</html>
