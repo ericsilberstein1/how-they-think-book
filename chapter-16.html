@@ -73,7 +73,7 @@
       <label for="lb-208" class="lightbox-overlay"><img src="images/RC188.png" alt=""></label>
       <figcaption>Figure 16.5. The tensors going in and out of every module within the causal self attention module.</figcaption>
     </figure>
-    <p>(* To keep my diagrams consistent with the code I show I show the output of “split into heads” as  32×2048×10×128. However, before we go into scaled dot product attention, we need to swap the two middle dimensions to get to 32×10×2048×128 for q, k, and v. You’ll see this is the shape I show as the input in <a href="#fig-16-6" class="xref" data-preview="images/RC189.png">figure 16.6</a> below. The convention is that operations are performed on the deepest dimension or dimensions. Scaled dot product attention performs operations at the level of the “2048” dimension and the “128” dimension. The operations are identical across the “8” and “10” dimension. This is why we need to swap the “10” dimension and the “2048” dimension.)</p>
+    <p>(* To keep my diagrams consistent with the code I show the output of “split into heads” as  32×2048×10×128. However, before we go into scaled dot product attention, we need to swap the two middle dimensions to get to 32×10×2048×128 for q, k, and v. You’ll see this is the shape I show as the input in <a href="#fig-16-6" class="xref" data-preview="images/RC189.png">figure 16.6</a> below. The convention is that operations are performed on the deepest dimension or dimensions. Scaled dot product attention performs operations at the level of the “2048” dimension and the “128” dimension. The operations are identical across the “8” and “10” dimension. This is why we need to swap the “10” dimension and the “2048” dimension.)</p>
     <p>Here’s scaled dot product attention. This is where it gets really confusing.</p>
     <figure id="fig-16-6">
       <input type="checkbox" id="lb-209" class="lightbox-toggle">
@@ -97,7 +97,7 @@
     <a href="index.html">Contents</a>
     <a href="chapter-17.html">Next &#8594;</a>
   </nav>
-  <footer class="site-footer"><em>How They Think</em> &mdash; February 25, 2026 draft &mdash; &copy; Eric Silberstein</footer>
+  <footer class="site-footer"><em>How They Think</em> &mdash; June 26, 2026 draft &mdash; &copy; Eric Silberstein</footer>
   <div id="preview-tooltip" class="preview-tooltip" hidden>
     <img id="preview-tooltip-img" src="" alt="">
   </div>
